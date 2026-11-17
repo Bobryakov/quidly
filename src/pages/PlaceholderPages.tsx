@@ -1,15 +1,6 @@
 import { EmptyState } from '../components/EmptyState'
 import { PageHeader } from '../components/PageHeader'
 
-export function OperationsPage() {
-  return (
-    <>
-      <PageHeader title="Операции" />
-      <EmptyState emoji="📋" title="Операций пока нет" hint="Нажми ➕, чтобы добавить первую трату" />
-    </>
-  )
-}
-
 export function AnalyticsPage() {
   return (
     <>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDate, formatMoney, weekdayMondayFirst } from './format'
+import { formatDate, formatMoney, opsWord, weekdayMondayFirst } from './format'
 
 const NBSP = ' '
 
@@ -40,5 +40,14 @@ describe('weekdayMondayFirst', () => {
   it('неделя начинается с понедельника', () => {
     expect(weekdayMondayFirst(new Date(2026, 10, 16))).toBe(0) // понедельник
     expect(weekdayMondayFirst(new Date(2026, 10, 22))).toBe(6) // воскресенье
+  })
+})
+
+describe('склонение', () => {
+  it('1 операция, 2 операции, 5 операций, 11 операций, 21 операция', () => {
+    expect([1, 2, 5, 11, 12, 21, 22, 25, 111].map(opsWord)).toEqual([
+      '1 операция', '2 операции', '5 операций', '11 операций', '12 операций',
+      '21 операция', '22 операции', '25 операций', '111 операций',
+    ])
   })
 })

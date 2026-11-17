@@ -1,3 +1,4 @@
+import { Link } from 'react-router'
 import { PageHeader } from '../components/PageHeader'
 import { useTheme, type ThemeChoice } from '../lib/theme'
 
@@ -7,8 +8,12 @@ const THEMES: { value: ThemeChoice; label: string; emoji: string }[] = [
   { value: 'system', label: 'Как в системе', emoji: '📱' },
 ]
 
+const READY = [
+  { to: '/settings/accounts', emoji: '💳', label: 'Счета' },
+  { to: '/settings/categories', emoji: '🏷️', label: 'Категории' },
+]
+
 const COMING_SOON = [
-  { emoji: '💳', label: 'Счета и категории', stage: 2 },
   { emoji: '🎯', label: 'Бюджеты', stage: 3 },
   { emoji: '🔁', label: 'Подписки', stage: 4 },
   { emoji: '📥', label: 'Импорт выписок', stage: 7 },
@@ -22,6 +27,24 @@ export function SettingsPage() {
   return (
     <>
       <PageHeader title="Настройки" />
+
+      <section className="mb-4 rounded-3xl bg-white px-5 py-1 shadow-sm dark:bg-slate-900">
+        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+          {READY.map((item) => (
+            <li key={item.to}>
+              <Link to={item.to} className="flex items-center gap-3 py-3.5 font-medium">
+                <span className="text-xl" aria-hidden>
+                  {item.emoji}
+                </span>
+                <span className="flex-1">{item.label}</span>
+                <span className="text-slate-400" aria-hidden>
+                  ›
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <section className="mb-4 rounded-3xl bg-white p-5 shadow-sm dark:bg-slate-900">
         <h2 className="mb-3 font-semibold">Тема</h2>

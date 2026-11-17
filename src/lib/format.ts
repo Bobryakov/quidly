@@ -36,3 +36,14 @@ export function formatDate(date: Date): string {
 export function weekdayMondayFirst(date: Date): number {
   return (date.getDay() + 6) % 7
 }
+
+/** Русское склонение: plural(5, ['операция', 'операции', 'операций']) → «операций». */
+export function plural(n: number, forms: [string, string, string]): string {
+  const n10 = Math.abs(n) % 10
+  const n100 = Math.abs(n) % 100
+  if (n10 === 1 && n100 !== 11) return forms[0]
+  if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) return forms[1]
+  return forms[2]
+}
+
+export const opsWord = (n: number) => `${n} ${plural(n, ['операция', 'операции', 'операций'])}`
