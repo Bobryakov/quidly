@@ -1,5 +1,7 @@
 import { db } from './db'
 import { budgetFor, closeMonth, defaultActions, monthsToAutoClose, type BudgetContext } from '../lib/budget'
+import { monthLower } from '../lib/dates'
+import { goalBalances, justAchieved } from '../lib/goals'
 import { nextChargeDate } from '../lib/subscriptions'
 import type {
   Account,
@@ -7,6 +9,7 @@ import type {
   Category,
   CategoryKind,
   CloseAction,
+  Goal,
   MonthClosing,
   SubscriptionPeriod,
   Transaction,
@@ -290,25 +293,47 @@ export async function loadBudgetContext(): Promise<BudgetContext> {
   }
 }
 
-/** Закрыть месяц: записать решения по остаткам и рассчитанные переносы. */
+/** Закрыть месяц: записать решения по остаткам и рассчитанные переносы; остатки «в копилку» — пополнить копилки. */
 export async function closeBudgetMonth(
   month: string,
   actions?: Record<string, CloseAction>,
   auto = false,
-): Promise<MonthClosing> {
-  const ctx = await loadBudgetContext()
-  if (ctx.closings.has(month)) throw new Error('Итоги этого месяца уже подведены')
-  const mb = budgetFor(ctx, month)
-  const chosen = actions ?? defaultActions(mb, ctx.rolloverOff)
-  const closing: MonthClosing = {
-    month,
-    closedAt: Date.now(),
-    auto,
-    actions: chosen,
-    ...closeMonth(mb, chosen, ctx),
-  }
-  await db.closings.add(closing)
-  return closing
+): Promise<MonthClosing & { achievedGoals: string[] }> {
+  return db.transaction('rw', [db.budgets, db.transactions, db.categories, db.closings, db.meta, db.goals, db.goalMoves], async () => {
+    const ctx = await loadBudgetContext()
+    if (ctx.closings.has(month)) throw new Error('Итоги этого месяца уже подведены')
+    const mb = budgetFor(ctx, month)
+    const chosen = { ...(actions ?? defaultActions(mb, ctx.rolloverOff)) }
+    // Если копилку успели удалить — остаток просто переносится
+    for (const [catId, a] of Object.entries(chosen)) {
+      if (a.type === 'goal' && !(await db.goals.get(a.goalId))) chosen[catId] = { type: 'carry' }
+    }
+    const closing: MonthClosing = {
+      month,
+      closedAt: Date.now(),
+      auto,
+      actions: chosen,
+      ...closeMonth(mb, chosen, ctx),
+    }
+    await db.closings.add(closing)
+
+    const achievedGoals: string[] = []
+    for (const [catId, { goalId, amount }] of Object.entries(closing.toGoals ?? {})) {
+      const cat = await db.categories.get(catId)
+      // Пополнение записывается последним днём закрытого месяца
+      const { achieved } = await addGoalMove(goalId, amount, `${month}-${lastDay(month)}`, {
+        comment: `Остаток «${cat?.name ?? 'категории'}» за ${monthLower(month)}`,
+        source: 'closing',
+      })
+      if (achieved) achievedGoals.push(goalId)
+    }
+    return { ...closing, achievedGoals }
+  })
+}
+
+function lastDay(month: string): string {
+  const [y, m] = month.split('-').map(Number)
+  return String(new Date(y, m, 0).getDate()).padStart(2, '0')
 }
 
 /** При запуске: закрыть по умолчанию месяцы, по которым никто не принял решение (через 7 дней). */
@@ -412,4 +437,89 @@ export async function undoSubscriptionCharge(id: string, prevNextDate: string, t
     if (transactionId) await db.transactions.delete(transactionId)
     await db.subscriptions.update(id, { nextDate: prevNextDate })
   })
+}
+
+// ---------- копилки ----------
+
+export type GoalInput = { name: string; emoji: string; color: string; target: number; deadline?: string }
+
+function checkGoal(g: GoalInput) {
+  if (!g.name.trim()) throw new Error('Впишите название цели')
+  if (!Number.isInteger(g.target) || g.target <= 0) throw new Error('Впишите, сколько нужно накопить')
+  if (g.deadline && !/^\d{4}-\d{2}-\d{2}$/.test(g.deadline)) throw new Error('Неверная дата')
+}
+
+export async function createGoal(input: GoalInput): Promise<string> {
+  checkGoal(input)
+  const id = newId()
+  await db.goals.add({
+    id,
+    name: input.name.trim(),
+    emoji: input.emoji,
+    color: input.color,
+    target: input.target,
+    ...(input.deadline ? { deadline: input.deadline } : {}),
+    createdAt: Date.now(),
+  })
+  return id
+}
+
+export async function updateGoal(id: string, input: GoalInput): Promise<void> {
+  const current = await db.goals.get(id)
+  if (!current) throw new Error('Цель не найдена')
+  checkGoal(input)
+  const next: Goal = { ...current, name: input.name.trim(), emoji: input.emoji, color: input.color, target: input.target }
+  if (input.deadline) next.deadline = input.deadline
+  else delete next.deadline
+  await db.goals.put(next)
+}
+
+/** Удалить копилку вместе с историей. Деньги на счетах не меняются — копилки виртуальные. */
+export async function deleteGoal(id: string): Promise<void> {
+  await db.transaction('rw', db.goals, db.goalMoves, async () => {
+    await db.goalMoves.where('goalId').equals(id).delete()
+    await db.goals.delete(id)
+  })
+}
+
+export async function goalBalance(goalId: string): Promise<number> {
+  return goalBalances(await db.goalMoves.where('goalId').equals(goalId).toArray()).get(goalId) ?? 0
+}
+
+/**
+ * Пополнение (amount > 0) или снятие (amount < 0). Снять больше, чем лежит, нельзя.
+ * achieved = true, если этим пополнением цель впервые достигнута.
+ */
+export async function addGoalMove(
+  goalId: string,
+  amount: number,
+  date: string,
+  opts: { comment?: string; source?: 'manual' | 'closing' } = {},
+): Promise<{ moveId: string; achieved: boolean }> {
+  if (!Number.isInteger(amount) || amount === 0) throw new Error('Введите сумму')
+  return db.transaction('rw', db.goals, db.goalMoves, async () => {
+    const goal = await db.goals.get(goalId)
+    if (!goal) throw new Error('Цель не найдена')
+    const before = await goalBalance(goalId)
+    if (before + amount < 0) throw new Error('Столько в копилке нет')
+    const moveId = newId()
+    const comment = opts.comment?.trim()
+    await db.goalMoves.add({
+      id: moveId,
+      goalId,
+      amount,
+      date,
+      ...(comment ? { comment } : {}),
+      source: opts.source ?? 'manual',
+      createdAt: Date.now(),
+    })
+    const achieved = !goal.achievedAt && justAchieved(before, before + amount, goal.target)
+    if (achieved) await db.goals.update(goalId, { achievedAt: Date.now() })
+    return { moveId, achieved }
+  })
+}
+
+/** Отменить движение (кнопка «Отменить» в плашке). Отметка «цель достигнута» остаётся. */
+export async function deleteGoalMove(moveId: string): Promise<void> {
+  await db.goalMoves.delete(moveId)
 }

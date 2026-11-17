@@ -13,12 +13,3 @@ export function AnalyticsPage() {
     </>
   )
 }
-
-export function GoalsPage() {
-  return (
-    <>
-      <PageHeader title="Цели" />
-      <EmptyState emoji="🐷" title="Копилок пока нет" hint="Скоро здесь можно будет откладывать на мечту" />
-    </>
-  )
-}

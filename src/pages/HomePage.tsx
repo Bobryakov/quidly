@@ -11,12 +11,15 @@ import {
   useBudgetContext,
   useById,
   useCategories,
+  useGoalMoves,
+  useGoals,
   useNoticeDays,
   useSubscriptions,
   useTransactions,
 } from '../db/hooks'
 import { sumByType, totalBalance } from '../lib/balance'
 import { budgetFor, pendingSummaryMonth } from '../lib/budget'
+import { goalBalances, totalSaved } from '../lib/goals'
 import { monthKey, todayISO } from '../lib/dates'
 import { formatDate, formatMoney } from '../lib/format'
 
@@ -31,8 +34,10 @@ export function HomePage() {
   const budgetCtx = useBudgetContext()
   const subscriptions = useSubscriptions()
   const noticeDays = useNoticeDays()
+  const goals = useGoals()
+  const goalMoves = useGoalMoves()
 
-  if (!accounts || !transactions || !balances || !budgetCtx || !subscriptions || noticeDays === undefined) return null
+  if (!accounts || !transactions || !balances || !budgetCtx || !subscriptions || noticeDays === undefined || !goals || !goalMoves) return null
 
   const active = accounts.filter((a) => !a.archived)
   const total = totalBalance(accounts, balances)
@@ -40,6 +45,12 @@ export function HomePage() {
   const { expense, income } = sumByType(transactions.filter((t) => monthKey(t.date) === month))
   const recent = transactions.slice(0, 5)
   const mb = budgetFor(budgetCtx, month)
+  const goalBal = goalBalances(goalMoves)
+  const saved = totalSaved(goals, goalBal)
+  // В «Итогах месяца» сначала предлагаем ещё не достигнутые копилки
+  const goalsForSummary = [...goals].sort(
+    (a, b) => Number((goalBal.get(a.id) ?? 0) >= a.target) - Number((goalBal.get(b.id) ?? 0) >= b.target),
+  )
   const pending = pendingSummaryMonth(budgetCtx, todayISO())
 
   return (
@@ -54,6 +65,12 @@ export function HomePage() {
         <p className="tabular mt-1 text-4xl font-extrabold" aria-label="Общий баланс">
           {formatMoney(total)}
         </p>
+        {saved > 0 && (
+          <Link to="/goals" className="mt-1 block text-sm opacity-90" aria-label="Отложено в копилки">
+            🐷 в копилках {formatMoney(saved, { hideZeroKopecks: true })} · свободно{' '}
+            <b className="tabular">{formatMoney(total - saved, { hideZeroKopecks: true })}</b>
+          </Link>
+        )}
         <div className="mt-4 flex gap-4 text-sm">
           <span>
             <span className="opacity-80">Расходы за месяц</span>
@@ -70,7 +87,7 @@ export function HomePage() {
 
       <SubscriptionDue subscriptions={subscriptions} categories={catById} noticeDays={noticeDays} />
 
-      {pending && <MonthSummaryCard key={pending} ctx={budgetCtx} month={pending} categories={catById} />}
+      {pending && <MonthSummaryCard key={pending} ctx={budgetCtx} month={pending} categories={catById} goals={goalsForSummary} />}
 
       <HomeBudgetCard mb={mb} categories={catById} />
 

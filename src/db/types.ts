@@ -76,7 +76,12 @@ export interface BudgetRecord {
 }
 
 /** Что сделать с остатком категории при закрытии месяца. */
-export type CloseAction = { type: 'carry' } | { type: 'reset' } | { type: 'cover'; to: string }
+export type CloseAction =
+  | { type: 'carry' }
+  | { type: 'reset' }
+  | { type: 'cover'; to: string }
+  /** Остаток — в копилку (этап 5) */
+  | { type: 'goal'; goalId: string }
 
 /** Итоги закрытого месяца: решения и рассчитанные переносы на следующий месяц. */
 export interface MonthClosing {
@@ -90,6 +95,8 @@ export interface MonthClosing {
   carries: Record<string, number>
   /** Сколько перерасхода каждой категории покрыто остатками других */
   covered: Record<string, number>
+  /** Какой остаток какой категории ушёл в копилку (этап 5): id категории → { копилка, сумма } */
+  toGoals?: Record<string, { goalId: string; amount: number }>
 }
 
 // ---------- подписки (схема v3) ----------
@@ -114,5 +121,35 @@ export interface Subscription {
   categoryId: string
   /** На паузе — не напоминаем и не считаем в сумму за месяц */
   paused: boolean
+  createdAt: number
+}
+
+// ---------- копилки (схема v4) ----------
+
+/** Цель-копилка. Деньги «виртуальные»: балансы счетов не меняются. */
+export interface Goal {
+  id: string
+  name: string
+  emoji: string
+  color: string
+  /** Сколько хотим накопить, копейки > 0 */
+  target: number
+  /** Срок 'ГГГГ-ММ-ДД' — необязательный */
+  deadline?: string
+  /** Когда цель впервые достигнута (для конфетти и бейджа) */
+  achievedAt?: number
+  createdAt: number
+}
+
+/** Движение по копилке: пополнение (+) или снятие (−). */
+export interface GoalMove {
+  id: string
+  goalId: string
+  /** Копейки: > 0 — пополнение, < 0 — снятие */
+  amount: number
+  date: string
+  comment?: string
+  /** Откуда: вручную или из «Итогов месяца» */
+  source: 'manual' | 'closing'
   createdAt: number
 }

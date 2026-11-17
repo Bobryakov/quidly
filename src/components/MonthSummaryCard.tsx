@@ -1,16 +1,17 @@
 import { motion } from 'framer-motion'
 import { useMemo, useState } from 'react'
 import { closeBudgetMonth } from '../db/repo'
-import type { Category, CloseAction } from '../db/types'
+import type { Category, CloseAction, Goal } from '../db/types'
 import { AUTO_CLOSE_DAY, budgetFor, closeMonth, defaultActions, type BudgetContext } from '../lib/budget'
 import { monthGenitive } from '../lib/dates'
 import { formatMoney } from '../lib/format'
-import { showToast } from '../lib/store'
+import { celebrate, showToast } from '../lib/store'
 
 const money = (k: number) => formatMoney(k, { hideZeroKopecks: true })
 
 const ACTIONS = [
   { type: 'carry', label: '🔁 Перенести' },
+  { type: 'goal', label: '🐷 В копилку' },
   { type: 'cover', label: '🩹 Покрыть' },
   { type: 'reset', label: '🧹 Обнулить' },
 ] as const
@@ -20,10 +21,13 @@ export function MonthSummaryCard({
   ctx,
   month,
   categories,
+  goals,
 }: {
   ctx: BudgetContext
   month: string
   categories: Map<string, Category>
+  /** Копилки — куда можно отправить остаток (сначала ещё не достигнутые) */
+  goals: Goal[]
 }) {
   const mb = useMemo(() => budgetFor(ctx, month), [ctx, month])
   const [actions, setActions] = useState<Record<string, CloseAction>>(() => defaultActions(mb, ctx.rolloverOff))
@@ -33,17 +37,26 @@ export function MonthSummaryCard({
   const result = closeMonth(mb, actions, ctx)
   const totalCarry = Object.values(result.carries).reduce((s, v) => s + v, 0)
 
-  const setAll = (type: 'carry' | 'reset') => {
+  const setAll = (type: 'carry' | 'reset' | 'goal') => {
     const next: Record<string, CloseAction> = {}
-    for (const c of mb.categories) if (c.left > 0) next[c.categoryId] = { type }
+    for (const c of mb.categories) {
+      if (c.left <= 0) continue
+      next[c.categoryId] = type === 'goal' ? { type: 'goal', goalId: goals[0].id } : { type }
+    }
     setActions(next)
   }
 
   const apply = async () => {
     setSaving(true)
     try {
-      await closeBudgetMonth(month, actions)
-      showToast(`✓ Итоги ${monthGenitive(month)} подведены`)
+      const closing = await closeBudgetMonth(month, actions)
+      const saved = Object.values(closing.toGoals ?? {}).reduce((sum, g) => sum + g.amount, 0)
+      if (closing.achievedGoals.length > 0) celebrate()
+      showToast(
+        closing.achievedGoals.length > 0
+          ? `🎉 Цель достигнута! Итоги ${monthGenitive(month)} подведены`
+          : `✓ Итоги ${monthGenitive(month)} подведены${saved > 0 ? ` · 🐷 в копилки ${money(saved)}` : ''}`,
+      )
     } catch (e) {
       showToast((e as Error).message)
       setSaving(false)
@@ -67,10 +80,15 @@ export function MonthSummaryCard({
         Потрачено {money(mb.total.spent)} из {money(mb.total.limit)}. Что сделать с остатками?
       </p>
 
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 flex flex-wrap gap-2">
         <button type="button" onClick={() => setAll('carry')} className="rounded-full bg-white px-3 py-1.5 text-sm font-medium shadow-sm dark:bg-slate-900">
           Перенести всё
         </button>
+        {goals.length > 0 && (
+          <button type="button" onClick={() => setAll('goal')} className="rounded-full bg-white px-3 py-1.5 text-sm font-medium shadow-sm dark:bg-slate-900">
+            Всё в копилку
+          </button>
+        )}
         <button type="button" onClick={() => setAll('reset')} className="rounded-full bg-white px-3 py-1.5 text-sm font-medium shadow-sm dark:bg-slate-900">
           Обнулить всё
         </button>
@@ -92,7 +110,9 @@ export function MonthSummaryCard({
               {c.left > 0 && (
                 <>
                   <div className="mt-2 flex flex-wrap gap-1.5" role="radiogroup" aria-label={`Что сделать с остатком: ${categories.get(c.categoryId)?.name}`}>
-                    {ACTIONS.filter((x) => x.type !== 'cover' || overspent.length > 0).map((x) => {
+                    {ACTIONS.filter(
+                      (x) => (x.type !== 'cover' || overspent.length > 0) && (x.type !== 'goal' || goals.length > 0),
+                    ).map((x) => {
                       const active = a?.type === x.type
                       return (
                         <button
@@ -103,7 +123,12 @@ export function MonthSummaryCard({
                           onClick={() =>
                             setActions({
                               ...actions,
-                              [c.categoryId]: x.type === 'cover' ? { type: 'cover', to: overspent[0].categoryId } : { type: x.type },
+                              [c.categoryId]:
+                                x.type === 'cover'
+                                  ? { type: 'cover', to: overspent[0].categoryId }
+                                  : x.type === 'goal'
+                                    ? { type: 'goal', goalId: goals[0].id }
+                                    : { type: x.type },
                             })
                           }
                           className={`rounded-full px-3 py-1 text-xs font-medium ${
@@ -115,6 +140,25 @@ export function MonthSummaryCard({
                       )
                     })}
                   </div>
+                  {a?.type === 'goal' && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs" role="radiogroup" aria-label="В какую копилку">
+                      <span className="text-slate-500">в копилку:</span>
+                      {goals.map((g) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          role="radio"
+                          aria-checked={a.goalId === g.id}
+                          onClick={() => setActions({ ...actions, [c.categoryId]: { type: 'goal', goalId: g.id } })}
+                          className={`rounded-full px-2.5 py-1 font-medium ${
+                            a.goalId === g.id ? 'bg-pink-500 text-white' : 'bg-pink-50 text-pink-700 dark:bg-pink-500/15 dark:text-pink-300'
+                          }`}
+                        >
+                          {g.emoji} {g.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {a?.type === 'cover' && (
                     <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
                       <span className="text-slate-500">чей перерасход:</span>
@@ -137,7 +181,9 @@ export function MonthSummaryCard({
 
               <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
                 {c.left < 0 && result.covered[c.categoryId] ? `покрыто ${money(result.covered[c.categoryId])} · ` : ''}
-                {carry > 0
+                {result.toGoals?.[c.categoryId]
+                  ? `🐷 ${money(result.toGoals[c.categoryId].amount)} — в копилку «${goals.find((g) => g.id === result.toGoals![c.categoryId].goalId)?.name}»`
+                  : carry > 0
                   ? `+${money(carry)} к лимиту следующего месяца`
                   : carry < 0
                     ? `−${money(-carry)} от лимита следующего месяца`

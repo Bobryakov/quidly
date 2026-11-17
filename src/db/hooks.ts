@@ -58,3 +58,15 @@ export function useSubscriptions() {
 export function useNoticeDays(): number | undefined {
   return useLiveQuery(async () => (await getMeta<number>(META.subscriptionNoticeDays)) ?? DEFAULT_NOTICE_DAYS, [])
 }
+
+export function useGoals() {
+  return useLiveQuery(() => db.goals.orderBy('createdAt').toArray(), [])
+}
+
+/** Все движения по копилкам, новые сверху. */
+export function useGoalMoves() {
+  return useLiveQuery(async () => {
+    const all = await db.goalMoves.toArray()
+    return all.sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1))
+  }, [])
+}

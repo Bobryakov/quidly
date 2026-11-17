@@ -112,6 +112,7 @@ describe('закрытие месяца', () => {
   it('по умолчанию остатки переносятся, перерасход — нет', () => {
     const r = closeMonth(oct, defaultActions(oct, new Set()), opts)
     expect(r.carries).toEqual({ food: 120000, cafe: 50000, gifts: 200000 })
+    expect(r.toGoals).toEqual({})
   })
 
   it('«Обнулить» — остаток не переносится', () => {
@@ -151,6 +152,19 @@ describe('закрытие месяца', () => {
     const r = closeMonth(oct, defaultActions(oct, off), { ...opts, rolloverOff: off })
     expect(r.carries.food).toBeUndefined()
     expect(r.carries.gifts).toBe(200000)
+  })
+
+  it('«В копилку»: остаток уходит в копилку и не переносится в лимит', () => {
+    const r = closeMonth(oct, { food: { type: 'goal', goalId: 'trip' }, gifts: { type: 'carry' } }, opts)
+    expect(r.toGoals).toEqual({ food: { goalId: 'trip', amount: 120000 } })
+    expect(r.carries.food).toBeUndefined()
+    expect(r.carries.gifts).toBe(200000)
+  })
+
+  it('сначала покрытие, остаток — в копилку', () => {
+    const r = closeMonth(oct, { gifts: { type: 'cover', to: 'bus' }, cafe: { type: 'goal', goalId: 'trip' } }, opts)
+    expect(r.covered.bus).toBe(80000)
+    expect(r.toGoals).toEqual({ cafe: { goalId: 'trip', amount: 50000 } })
   })
 
   it('покрыть категорию без перерасхода нельзя — ничего не меняется', () => {

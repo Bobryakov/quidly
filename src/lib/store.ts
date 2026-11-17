@@ -63,3 +63,12 @@ export function hideToast() {
   clearTimeout(toastTimer)
   toasts.set(null)
 }
+
+// ---------- конфетти ----------
+
+/** Номер «праздника»: каждое увеличение запускает конфетти. */
+export const celebration = createStore(0)
+
+export function celebrate() {
+  celebration.set((n) => n + 1)
+}

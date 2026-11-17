@@ -149,7 +149,7 @@ describe('обновление базы с версии 1 (сразу до по�
     // Открываем новой версией приложения
     const v2 = new QuidlyDB(name)
     await v2.open()
-    expect(v2.verno).toBe(3)
+    expect(v2.verno).toBe(4)
     expect(await v2.accounts.get('acc')).toMatchObject({ name: 'Карта', initialBalance: 500 })
     expect(await v2.transactions.count()).toBe(1)
     expect(await v2.categories.count()).toBe(1) // стартовые категории повторно не добавляются

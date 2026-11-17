@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { HashRouter, Route, Routes, useLocation } from 'react-router'
 import { BottomNav } from './components/BottomNav'
+import { Confetti } from './components/Confetti'
 import { QuickAddButton, QuickAddSheet } from './components/QuickAdd'
 import { ToastHost } from './components/ToastHost'
 import { useAccounts } from './db/hooks'
@@ -8,7 +9,8 @@ import { BudgetsPage } from './pages/BudgetsPage'
 import { HomePage } from './pages/HomePage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { OperationsPage } from './pages/OperationsPage'
-import { AnalyticsPage, GoalsPage } from './pages/PlaceholderPages'
+import { GoalsPage } from './pages/GoalsPage'
+import { AnalyticsPage } from './pages/PlaceholderPages'
 import { SettingsPage } from './pages/SettingsPage'
 import { SubscriptionsPage } from './pages/SubscriptionsPage'
 import { AccountsPage } from './pages/settings/AccountsPage'
@@ -62,6 +64,7 @@ export function AppRoutes() {
       <BottomNav />
       <QuickAddSheet />
       <ToastHost />
+      <Confetti />
     </>
   )
 }

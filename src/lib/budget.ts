@@ -140,14 +140,15 @@ export function defaultActions(mb: MonthBudget, rolloverOff: Set<string>): Recor
  * Закрытие месяца: сколько каждой категории перейдёт в следующий месяц.
  * 1) «Покрыть перерасход»: остаток категории A гасит минус категории B (не больше, чем нужно).
  *    Что осталось у A после покрытия — переносится (или обнуляется, если перенос у A выключен).
- * 2) «Перенести» — остаток в лимит следующего месяца; «Обнулить» — 0.
+ * 2) «Перенести» — остаток в лимит следующего месяца; «Обнулить» — 0;
+ *    «В копилку» — остаток уходит в выбранную копилку (в лимит не переносится).
  * 3) Перерасход переносится минусом только если включена настройка «Переносить перерасход».
  */
 export function closeMonth(
   mb: MonthBudget,
   actions: Record<string, CloseAction>,
   opts: { carryOverspend: boolean; rolloverOff: Set<string> },
-): Pick<MonthClosing, 'carries' | 'covered'> {
+): Pick<MonthClosing, 'carries' | 'covered' | 'toGoals'> {
   const left = new Map(mb.categories.map((c) => [c.categoryId, c.left]))
   const covered: Record<string, number> = {}
 
@@ -164,19 +165,21 @@ export function closeMonth(
   }
 
   const carries: Record<string, number> = {}
+  const toGoals: Record<string, { goalId: string; amount: number }> = {}
   for (const c of mb.categories) {
     const rest = left.get(c.categoryId) ?? 0
     let carry = 0
     if (rest > 0) {
-      const a = actions[c.categoryId] ?? (opts.rolloverOff.has(c.categoryId) ? { type: 'reset' } : { type: 'carry' })
+      const a: CloseAction = actions[c.categoryId] ?? (opts.rolloverOff.has(c.categoryId) ? { type: 'reset' } : { type: 'carry' })
       if (a.type === 'carry') carry = rest
       else if (a.type === 'cover') carry = opts.rolloverOff.has(c.categoryId) ? 0 : rest
+      else if (a.type === 'goal') toGoals[c.categoryId] = { goalId: a.goalId, amount: rest }
     } else if (rest < 0 && opts.carryOverspend) {
       carry = rest
     }
     if (carry !== 0) carries[c.categoryId] = carry
   }
-  return { carries, covered }
+  return { carries, covered, toGoals }
 }
 
 /**
