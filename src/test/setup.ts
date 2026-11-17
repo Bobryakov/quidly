@@ -7,3 +7,12 @@ import { afterEach } from 'vitest'
 
 // Убираем отрисованный экран после каждого теста
 afterEach(() => cleanup())
+
+// Графикам (Recharts) нужен ResizeObserver, которого нет в тестовом «браузере»
+if (!('ResizeObserver' in globalThis)) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver
+}

@@ -79,3 +79,8 @@ export function monthGenitive(key: string): string {
 export function monthLower(key: string): string {
   return MONTHS_NOM[Number(key.slice(5, 7)) - 1].toLowerCase()
 }
+
+/** 'ГГГГ-ММ' → «ноябре» (для «в ноябре») */
+export function monthPrepositional(key: string): string {
+  return monthGenitive(key).replace(/[ая]$/, 'е')
+}

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { HashRouter, Route, Routes, useLocation } from 'react-router'
 import { BottomNav } from './components/BottomNav'
 import { Confetti } from './components/Confetti'
@@ -10,12 +10,14 @@ import { HomePage } from './pages/HomePage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { OperationsPage } from './pages/OperationsPage'
 import { GoalsPage } from './pages/GoalsPage'
-import { AnalyticsPage } from './pages/PlaceholderPages'
 import { SettingsPage } from './pages/SettingsPage'
 import { SubscriptionsPage } from './pages/SubscriptionsPage'
 import { AccountsPage } from './pages/settings/AccountsPage'
 import { CategoriesPage } from './pages/settings/CategoriesPage'
 import { useApplyTheme } from './lib/theme'
+
+// Графики — тяжёлая библиотека, поэтому экран аналитики загружается, только когда его открывают
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 
 // HashRouter: адреса экранов вида /quidly/#/settings.
 // Так GitHub Pages не выдаёт «страница не найдена» при обновлении экрана.
@@ -50,7 +52,14 @@ export function AppRoutes() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/operations" element={<OperationsPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route
+            path="/analytics"
+            element={
+              <Suspense fallback={null}>
+                <AnalyticsPage />
+              </Suspense>
+            }
+          />
           <Route path="/goals" element={<GoalsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/accounts" element={<AccountsPage />} />
