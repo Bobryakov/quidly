@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Реальные выписки банков — личные данные. Хранятся только на ноутбуке, на GitHub не попадают.
+samples/*
+!samples/README.md

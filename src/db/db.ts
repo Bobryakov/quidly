@@ -6,6 +6,7 @@ import type {
   Category,
   Goal,
   GoalMove,
+  ImportRule,
   MetaRecord,
   MonthClosing,
   Subscription,
@@ -29,6 +30,7 @@ export class QuidlyDB extends Dexie {
   subscriptions!: EntityTable<Subscription, 'id'>
   goals!: EntityTable<Goal, 'id'>
   goalMoves!: EntityTable<GoalMove, 'id'>
+  importRules!: EntityTable<ImportRule, 'id'>
 
   constructor(name = 'quidly') {
     super(name)
@@ -61,6 +63,13 @@ export class QuidlyDB extends Dexie {
       goalMoves: 'id, goalId, date',
     })
 
+    // Версия 5 — этап 7: импорт выписок. Правила автокатегорий + у операций индекс метки импорта
+    // (поле необязательное, старые операции не меняются).
+    this.version(5).stores({
+      importRules: 'id, pattern, categoryId',
+      transactions: 'id, date, type, accountId, toAccountId, categoryId, createdAt, subscriptionId, importKey',
+    })
+
     // Стартовые категории кладутся один раз — при самом первом создании базы
     this.on('populate', (tx) => {
       tx.table('categories').bulkAdd(defaultCategories())
@@ -71,7 +80,7 @@ export class QuidlyDB extends Dexie {
 export const db = new QuidlyDB()
 
 /** Текущая версия схемы — пригодится для бэкапов (этап 8). */
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 /**
  * Просим браузер не удалять наши данные при нехватке места.

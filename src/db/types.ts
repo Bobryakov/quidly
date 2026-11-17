@@ -48,6 +48,8 @@ export interface Transaction {
   comment?: string
   /** Если операция записана кнопкой «Проведено» у подписки (схема v3) */
   subscriptionId?: string
+  /** Метка импорта из выписки — по ней повторный импорт той же выписки ничего не задваивает (схема v5) */
+  importKey?: string
   createdAt: number
   updatedAt: number
 }
@@ -151,5 +153,16 @@ export interface GoalMove {
   comment?: string
   /** Откуда: вручную или из «Итогов месяца» */
   source: 'manual' | 'closing'
+  createdAt: number
+}
+
+// ---------- правила импорта (схема v5) ----------
+
+/** «PYATEROCHKA» → Продукты: запоминается, когда человек поправил категорию при импорте. */
+export interface ImportRule {
+  id: string
+  /** Ключ продавца (см. merchantKey): описание операции должно его содержать */
+  pattern: string
+  categoryId: string
   createdAt: number
 }

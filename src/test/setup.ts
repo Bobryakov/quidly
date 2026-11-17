@@ -1,9 +1,13 @@
 import 'fake-indexeddb/auto'
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterEach } from 'vitest'
 
 // В тестах вместо настоящей базы браузера — её копия в памяти (fake-indexeddb).
+
+// Ждём появления элементов на экране до 5 секунд (по умолчанию — 1 секунда,
+// на медленном компьютере страницы, которые грузятся отдельно, не успевают)
+configure({ asyncUtilTimeout: 5000 })
 
 // Убираем отрисованный экран после каждого теста
 afterEach(() => cleanup())

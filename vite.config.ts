@@ -35,7 +35,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+        globPatterns: ['**/*.{js,mjs,css,html,svg,png,ico,woff2}'],
+        // Чтение PDF (pdf.js) и Excel — крупные файлы; кладём их в офлайн-кэш, чтобы импорт работал без интернета
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         navigateFallback: `${BASE}index.html`,
       },
     }),
@@ -43,5 +45,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    // на медленном компьютере первый запуск дольше — даём тестам запас
+    testTimeout: 20000,
   },
 })

@@ -123,7 +123,7 @@ describe('обновление базы с версии 3', () => {
 
     const v4 = new QuidlyDB(name)
     await v4.open()
-    expect(v4.verno).toBe(4)
+    expect(v4.verno).toBe(5)
     expect(await v4.subscriptions.get('s1')).toMatchObject({ name: 'Кино' })
     expect(await v4.transactions.where('subscriptionId').equals('s1').count()).toBe(1)
     expect(await v4.goals.count()).toBe(0)

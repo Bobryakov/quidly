@@ -1,8 +1,10 @@
 import { db } from './db'
 import { budgetFor, closeMonth, defaultActions, monthsToAutoClose, type BudgetContext } from '../lib/budget'
-import { monthLower } from '../lib/dates'
+import { computeBalances } from '../lib/balance'
+import { addDays, monthLower } from '../lib/dates'
 import { goalBalances, justAchieved } from '../lib/goals'
 import { nextChargeDate } from '../lib/subscriptions'
+import type { ImportItem } from '../import/plan'
 import type {
   Account,
   AccountType,
@@ -224,7 +226,7 @@ export async function categoryUsageCount(id: string): Promise<number> {
  */
 export async function mergeCategories(fromId: string, toId: string): Promise<number> {
   if (fromId === toId) throw new Error('Нельзя объединить категорию саму с собой')
-  return db.transaction('rw', [db.categories, db.transactions, db.budgets, db.subscriptions], async () => {
+  return db.transaction('rw', [db.categories, db.transactions, db.budgets, db.subscriptions, db.importRules], async () => {
     const [from, to] = await Promise.all([db.categories.get(fromId), db.categories.get(toId)])
     if (!from || !to) throw new Error('Категория не найдена')
     if (from.kind !== to.kind) throw new Error('Объединять можно только расходы с расходами, доходы с доходами')
@@ -238,6 +240,7 @@ export async function mergeCategories(fromId: string, toId: string): Promise<num
     if (targetHasBudget) await db.budgets.where('categoryId').equals(fromId).delete()
     else await db.budgets.where('categoryId').equals(fromId).modify({ categoryId: toId })
     await db.subscriptions.where('categoryId').equals(fromId).modify({ categoryId: toId })
+    await db.importRules.where('categoryId').equals(fromId).modify({ categoryId: toId })
     await db.categories.delete(fromId)
     return moved
   })
@@ -255,7 +258,10 @@ export async function deleteCategory(id: string): Promise<void> {
   if (cat && (await db.categories.where('kind').equals(cat.kind).count()) <= 1) {
     throw new Error('Должна остаться хотя бы одна категория')
   }
-  await db.categories.delete(id)
+  await db.transaction('rw', db.categories, db.importRules, async () => {
+    await db.importRules.where('categoryId').equals(id).delete()
+    await db.categories.delete(id)
+  })
 }
 
 // ---------- бюджеты ----------
@@ -522,4 +528,101 @@ export async function addGoalMove(
 /** Отменить движение (кнопка «Отменить» в плашке). Отметка «цель достигнута» остаётся. */
 export async function deleteGoalMove(moveId: string): Promise<void> {
   await db.goalMoves.delete(moveId)
+}
+
+// ---------- импорт выписок ----------
+
+/** Запомнить «продавец → категория». Если правило для продавца уже есть — обновить. */
+export async function saveImportRule(pattern: string, categoryId: string): Promise<void> {
+  const p = pattern.trim().toUpperCase()
+  if (!p) return
+  if (!(await db.categories.get(categoryId))) throw new Error('Категория не найдена')
+  const existing = await db.importRules.where('pattern').equals(p).first()
+  if (existing) await db.importRules.update(existing.id, { categoryId })
+  else await db.importRules.add({ id: newId(), pattern: p, categoryId, createdAt: Date.now() })
+}
+
+export async function deleteImportRule(id: string): Promise<void> {
+  await db.importRules.delete(id)
+}
+
+/**
+ * Записать отмеченные строки выписки. Всё одной транзакцией: либо записано всё, либо ничего.
+ * Возвращает, сколько операций добавлено.
+ */
+export async function applyImport(
+  items: ImportItem[],
+  accountId: string,
+  rules: { pattern: string; categoryId: string }[] = [],
+  /** Выровнять остаток счёта так, чтобы на эту дату он совпал с банком */
+  align?: { date: string; amount: number },
+): Promise<number> {
+  const chosen = items.filter((i) => i.include)
+  return db.transaction(
+    'rw',
+    [db.transactions, db.accounts, db.categories, db.subscriptions, db.importRules, db.meta],
+    async () => {
+      if (!(await db.accounts.get(accountId))) throw new Error('Счёт не найден')
+      for (const r of rules) await saveImportRule(r.pattern, r.categoryId)
+
+      const now = Date.now()
+      const fallbackExpense = (await db.categories.where('kind').equals('expense').toArray()).find((c) => c.name === 'Прочее')
+      let added = 0
+      for (const it of chosen) {
+        if (await db.transactions.where('importKey').equals(it.key).count()) continue // уже есть
+        const r = it.row
+        const base = { date: r.date, comment: r.description, importKey: it.key, createdAt: now + added, updatedAt: now }
+        if (it.kind === 'transfer') {
+          if (!it.counterAccountId || !(await db.accounts.get(it.counterAccountId))) throw new Error('Не выбран счёт для перевода')
+          const amount = r.amount - (it.fee ?? 0)
+          const [from, to] = r.direction === 'out' ? [accountId, it.counterAccountId] : [it.counterAccountId, accountId]
+          await db.transactions.add({ ...base, id: newId(), type: 'transfer', amount, accountId: from, toAccountId: to })
+          added++
+          if (it.fee) {
+            const feeCat = fallbackExpense ?? (await db.categories.where('kind').equals('expense').first())
+            await db.transactions.add({
+              ...base,
+              id: newId(),
+              type: 'expense',
+              amount: it.fee,
+              accountId,
+              categoryId: feeCat!.id,
+              comment: `Комиссия: ${r.description}`,
+              importKey: `${it.key}|fee`,
+              createdAt: now + added,
+            })
+            added++
+          }
+        } else {
+          const cat = it.categoryId ? await db.categories.get(it.categoryId) : undefined
+          if (!cat || cat.kind !== it.kind) throw new Error(`Не подходит категория для «${r.description}»`)
+          await db.transactions.add({
+            ...base,
+            id: newId(),
+            type: it.kind,
+            amount: r.amount,
+            accountId,
+            categoryId: cat.id,
+            ...(it.subscriptionId ? { subscriptionId: it.subscriptionId } : {}),
+          })
+          added++
+          if (it.subscriptionId) {
+            const s = await db.subscriptions.get(it.subscriptionId)
+            // подписка проведена: следующая дата — после этого списания
+            if (s && s.nextDate <= addDays(r.date, 3)) {
+              await db.subscriptions.update(s.id, { nextDate: nextChargeDate(s.nextDate, s.period, s.anchorDay) })
+            }
+          }
+        }
+      }
+      if (align) {
+        const acc = (await db.accounts.get(accountId))!
+        const txs = await db.transactions.where('date').belowOrEqual(align.date).toArray()
+        const now = computeBalances([acc], txs).get(accountId)!
+        if (now !== align.amount) await db.accounts.update(accountId, { initialBalance: acc.initialBalance + (align.amount - now) })
+      }
+      await db.meta.put({ key: META.lastAccountId, value: accountId })
+      return added
+    },
+  )
 }

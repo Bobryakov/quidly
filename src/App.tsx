@@ -14,10 +14,13 @@ import { SettingsPage } from './pages/SettingsPage'
 import { SubscriptionsPage } from './pages/SubscriptionsPage'
 import { AccountsPage } from './pages/settings/AccountsPage'
 import { CategoriesPage } from './pages/settings/CategoriesPage'
+import { ImportRulesPage } from './pages/settings/ImportRulesPage'
 import { useApplyTheme } from './lib/theme'
 
 // Графики — тяжёлая библиотека, поэтому экран аналитики загружается, только когда его открывают
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+// Импорт тянет библиотеки чтения PDF и Excel — тоже грузится только при открытии
+const ImportPage = lazy(() => import('./pages/ImportPage'))
 
 // HashRouter: адреса экранов вида /quidly/#/settings.
 // Так GitHub Pages не выдаёт «страница не найдена» при обновлении экрана.
@@ -66,10 +69,20 @@ export function AppRoutes() {
           <Route path="/settings/categories" element={<CategoriesPage />} />
           <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="/subscriptions" element={<SubscriptionsPage />} />
+          <Route
+            path="/import"
+            element={
+              <Suspense fallback={null}>
+                <ImportPage />
+              </Suspense>
+            }
+          />
+          <Route path="/settings/import-rules" element={<ImportRulesPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
       </main>
-      <QuickAddButton />
+      {/* На экране импорта внизу своя кнопка «Импортировать» — «+» там мешает */}
+      {pathname !== '/import' && <QuickAddButton />}
       <BottomNav />
       <QuickAddSheet />
       <ToastHost />

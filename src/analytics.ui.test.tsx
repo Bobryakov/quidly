@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AppRoutes } from './App'
 import { db } from './db/db'
 import { addTransaction, finishOnboarding, setBudget } from './db/repo'
@@ -22,6 +22,11 @@ function renderAt(path = '/') {
 
 let card = ''
 let cash = ''
+// Страница грузится отдельным куском — загружаем её заранее, чтобы тест не ждал
+beforeAll(async () => {
+  await import('./pages/AnalyticsPage')
+})
+
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(new Date(2026, 10, 10, 12, 0)) // 10 ноября 2026
