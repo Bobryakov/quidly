@@ -10,6 +10,7 @@ import { OnboardingPage } from './pages/OnboardingPage'
 import { OperationsPage } from './pages/OperationsPage'
 import { AnalyticsPage, GoalsPage } from './pages/PlaceholderPages'
 import { SettingsPage } from './pages/SettingsPage'
+import { SubscriptionsPage } from './pages/SubscriptionsPage'
 import { AccountsPage } from './pages/settings/AccountsPage'
 import { CategoriesPage } from './pages/settings/CategoriesPage'
 import { useApplyTheme } from './lib/theme'
@@ -53,6 +54,7 @@ export function AppRoutes() {
           <Route path="/settings/accounts" element={<AccountsPage />} />
           <Route path="/settings/categories" element={<CategoriesPage />} />
           <Route path="/budgets" element={<BudgetsPage />} />
+          <Route path="/subscriptions" element={<SubscriptionsPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
       </main>

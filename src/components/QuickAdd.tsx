@@ -5,16 +5,15 @@ import { useAccounts, useCategories, useLastAccountId, useTransactions } from '.
 import {
   addTransaction,
   deleteTransaction,
-  loadBudgetContext,
   restoreTransaction,
   updateTransaction,
   type TransactionInput,
 } from '../db/repo'
 import type { Account, Category, TransactionType } from '../db/types'
 import { displayKeypad, keypadToKopecks, kopecksToKeypad, pressKey, type KeypadKey } from '../lib/amount'
-import { budgetFor, budgetWarning } from '../lib/budget'
+import { withBudgetWarning } from '../db/budgetWatch'
 import { orderCategoriesByUsage } from '../lib/categoryOrder'
-import { monthKey, shortDayLabel, todayISO } from '../lib/dates'
+import { shortDayLabel, todayISO } from '../lib/dates'
 import { formatMoney } from '../lib/format'
 import { closeQuickAdd, openQuickAdd, quickAdd, showToast } from '../lib/store'
 import { Keypad } from './Keypad'
@@ -142,33 +141,20 @@ function QuickAddForm({ editId }: { editId?: string }) {
     if (amountKop <= 0) return fail('Сначала введите сумму')
     const input = buildInput(categoryId)
     try {
-      // Состояние бюджета категории до и после — чтобы предупредить о 80% и превышении
-      const watch = input.type === 'expense' ? input.categoryId : undefined
-      const month = monthKey(input.date)
-      const budgetOf = async () =>
-        watch ? budgetFor(await loadBudgetContext(), month).categories.find((c) => c.categoryId === watch) : undefined
-      const before = await budgetOf()
-
+      // Предупредить, если трата перевела бюджет категории за 80% или 100%
+      const { warning } = await withBudgetWarning(
+        input.type === 'expense' ? input.categoryId : undefined,
+        input.date,
+        () => (isEdit ? updateTransaction(editId!, input) : addTransaction(input).then(() => undefined)),
+      )
       let text: string
-      if (isEdit) {
-        await updateTransaction(editId!, input)
-        text = '✓ Изменения сохранены'
-      } else {
-        await addTransaction(input)
+      if (isEdit) text = '✓ Изменения сохранены'
+      else {
         const cat = categories?.find((c) => c.id === categoryId)
         const what = form.type === 'transfer' ? '⇄ Перевод' : `${cat?.emoji} ${cat?.name}`
         text = `✓ ${what} — ${formatMoney(amountKop, { hideZeroKopecks: true })}`
       }
-
-      const warning = budgetWarning(before, await budgetOf())
-      if (warning) {
-        const name = categories?.find((c) => c.id === warning.category.categoryId)?.name
-        const b = warning.category
-        text +=
-          warning.level === 'over'
-            ? ` · 🔴 ${name}: лимит превышен на ${formatMoney(-b.left, { hideZeroKopecks: true })}`
-            : ` · 🟡 ${name}: потрачено ${Math.round(b.percent)}% лимита`
-      }
+      if (warning) text += ` · ${warning}`
       closeQuickAdd()
       showToast(text, undefined, warning ? 4500 : undefined)
     } catch (e) {

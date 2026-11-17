@@ -46,6 +46,8 @@ export interface Transaction {
   /** Для расхода и дохода. У перевода категории нет. */
   categoryId?: string
   comment?: string
+  /** Если операция записана кнопкой «Проведено» у подписки (схема v3) */
+  subscriptionId?: string
   createdAt: number
   updatedAt: number
 }
@@ -88,4 +90,29 @@ export interface MonthClosing {
   carries: Record<string, number>
   /** Сколько перерасхода каждой категории покрыто остатками других */
   covered: Record<string, number>
+}
+
+// ---------- подписки (схема v3) ----------
+
+export type SubscriptionPeriod = 'week' | 'month' | 'quarter' | 'year'
+
+export interface Subscription {
+  id: string
+  name: string
+  /** Сумма списания в копейках, > 0 */
+  amount: number
+  period: SubscriptionPeriod
+  /** Дата ближайшего ещё не отмеченного списания 'ГГГГ-ММ-ДД' */
+  nextDate: string
+  /**
+   * Число месяца, в которое списывают (1–31). Нужно, чтобы подписка «на 31-е»
+   * в феврале списалась 28-го, а в марте снова 31-го.
+   */
+  anchorDay: number
+  accountId: string
+  /** Расходная категория */
+  categoryId: string
+  /** На паузе — не напоминаем и не считаем в сумму за месяц */
+  paused: boolean
+  createdAt: number
 }

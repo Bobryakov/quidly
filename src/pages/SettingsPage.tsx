@@ -12,10 +12,10 @@ const READY = [
   { to: '/settings/accounts', emoji: '💳', label: 'Счета' },
   { to: '/settings/categories', emoji: '🏷️', label: 'Категории' },
   { to: '/budgets', emoji: '🎯', label: 'Бюджеты' },
+  { to: '/subscriptions', emoji: '🔁', label: 'Подписки' },
 ]
 
 const COMING_SOON = [
-  { emoji: '🔁', label: 'Подписки', stage: 4 },
   { emoji: '📥', label: 'Импорт выписок', stage: 7 },
   { emoji: '🔒', label: 'PIN и автоблокировка', stage: 8 },
   { emoji: '💾', label: 'Экспорт и бэкап', stage: 8 },

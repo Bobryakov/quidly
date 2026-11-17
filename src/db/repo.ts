@@ -1,5 +1,6 @@
 import { db } from './db'
 import { budgetFor, closeMonth, defaultActions, monthsToAutoClose, type BudgetContext } from '../lib/budget'
+import { nextChargeDate } from '../lib/subscriptions'
 import type {
   Account,
   AccountType,
@@ -7,6 +8,7 @@ import type {
   CategoryKind,
   CloseAction,
   MonthClosing,
+  SubscriptionPeriod,
   Transaction,
   TransactionType,
 } from './types'
@@ -31,6 +33,8 @@ export const META = {
   lastAccountId: 'lastAccountId',
   /** Переносить перерасход бюджета минусом на следующий месяц (по умолчанию — нет) */
   carryOverspend: 'carryOverspend',
+  /** За сколько дней напоминать о списании подписки (1 / 3 / 7, по умолчанию 3) */
+  subscriptionNoticeDays: 'subscriptionNoticeDays',
 } as const
 
 // ---------- счета ----------
@@ -84,6 +88,9 @@ export async function deleteAccount(id: string): Promise<void> {
   if ((await accountUsageCount(id)) > 0) {
     throw new Error('У счёта есть операции — его можно только убрать в архив')
   }
+  if ((await db.subscriptions.where('accountId').equals(id).count()) > 0) {
+    throw new Error('К счёту привязаны подписки — сначала смените у них счёт')
+  }
   await db.accounts.delete(id)
 }
 
@@ -116,6 +123,7 @@ export type TransactionInput = {
   toAccountId?: string
   categoryId?: string
   comment?: string
+  subscriptionId?: string
 }
 
 async function checkTransaction(t: TransactionInput): Promise<void> {
@@ -144,6 +152,7 @@ function clean(t: TransactionInput): TransactionInput {
     accountId: t.accountId,
     ...(t.type === 'transfer' ? { toAccountId: t.toAccountId } : { categoryId: t.categoryId }),
     ...(comment ? { comment } : {}),
+    ...(t.subscriptionId ? { subscriptionId: t.subscriptionId } : {}),
   }
 }
 
@@ -212,7 +221,7 @@ export async function categoryUsageCount(id: string): Promise<number> {
  */
 export async function mergeCategories(fromId: string, toId: string): Promise<number> {
   if (fromId === toId) throw new Error('Нельзя объединить категорию саму с собой')
-  return db.transaction('rw', db.categories, db.transactions, db.budgets, async () => {
+  return db.transaction('rw', [db.categories, db.transactions, db.budgets, db.subscriptions], async () => {
     const [from, to] = await Promise.all([db.categories.get(fromId), db.categories.get(toId)])
     if (!from || !to) throw new Error('Категория не найдена')
     if (from.kind !== to.kind) throw new Error('Объединять можно только расходы с расходами, доходы с доходами')
@@ -225,6 +234,7 @@ export async function mergeCategories(fromId: string, toId: string): Promise<num
     const targetHasBudget = (await db.budgets.where('categoryId').equals(toId).count()) > 0
     if (targetHasBudget) await db.budgets.where('categoryId').equals(fromId).delete()
     else await db.budgets.where('categoryId').equals(fromId).modify({ categoryId: toId })
+    await db.subscriptions.where('categoryId').equals(fromId).modify({ categoryId: toId })
     await db.categories.delete(fromId)
     return moved
   })
@@ -234,6 +244,9 @@ export async function mergeCategories(fromId: string, toId: string): Promise<num
 export async function deleteCategory(id: string): Promise<void> {
   if ((await categoryUsageCount(id)) > 0) {
     throw new Error('В категории есть операции — сначала перенесите их в другую категорию')
+  }
+  if ((await db.subscriptions.where('categoryId').equals(id).count()) > 0) {
+    throw new Error('В категории есть подписки — объедините её с другой категорией')
   }
   const cat = await db.categories.get(id)
   if (cat && (await db.categories.where('kind').equals(cat.kind).count()) <= 1) {
@@ -304,4 +317,99 @@ export async function autoCloseMonths(today: string): Promise<string[]> {
   const months = monthsToAutoClose(ctx, today)
   for (const m of months) await closeBudgetMonth(m, undefined, true)
   return months
+}
+
+// ---------- подписки ----------
+
+export type SubscriptionInput = {
+  name: string
+  amount: number
+  period: SubscriptionPeriod
+  nextDate: string
+  accountId: string
+  categoryId: string
+  paused?: boolean
+}
+
+async function checkSubscription(s: SubscriptionInput) {
+  if (!s.name.trim()) throw new Error('Впишите название')
+  if (!Number.isInteger(s.amount) || s.amount <= 0) throw new Error('Введите сумму больше нуля')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s.nextDate)) throw new Error('Неверная дата')
+  if (!(await db.accounts.get(s.accountId))) throw new Error('Выберите счёт')
+  const cat = await db.categories.get(s.categoryId)
+  if (!cat || cat.kind !== 'expense') throw new Error('Выберите категорию расходов')
+}
+
+export async function createSubscription(input: SubscriptionInput): Promise<string> {
+  await checkSubscription(input)
+  const id = newId()
+  await db.subscriptions.add({
+    ...input,
+    name: input.name.trim(),
+    id,
+    anchorDay: Number(input.nextDate.slice(8, 10)),
+    paused: input.paused ?? false,
+    createdAt: Date.now(),
+  })
+  return id
+}
+
+export async function updateSubscription(id: string, input: SubscriptionInput): Promise<void> {
+  const current = await db.subscriptions.get(id)
+  if (!current) throw new Error('Подписка не найдена')
+  await checkSubscription(input)
+  await db.subscriptions.put({
+    ...current,
+    ...input,
+    name: input.name.trim(),
+    // если дату поменяли вручную — новое «число месяца» берём из неё
+    anchorDay: input.nextDate !== current.nextDate ? Number(input.nextDate.slice(8, 10)) : current.anchorDay,
+    paused: input.paused ?? current.paused,
+  })
+}
+
+/** Удаляет подписку. Уже записанные по ней операции остаются. */
+export async function deleteSubscription(id: string): Promise<void> {
+  await db.subscriptions.delete(id)
+}
+
+/**
+ * «Проведено»: записывает трату по подписке и сдвигает дату следующего списания.
+ * Дата траты — дата списания (но не позже сегодняшнего дня, если отметили заранее).
+ */
+export async function markSubscriptionPaid(
+  id: string,
+  today: string,
+): Promise<{ transactionId: string; prevNextDate: string }> {
+  return db.transaction('rw', [db.subscriptions, db.transactions, db.accounts, db.categories, db.meta], async () => {
+    const s = await db.subscriptions.get(id)
+    if (!s) throw new Error('Подписка не найдена')
+    const transactionId = await addTransaction({
+      type: 'expense',
+      amount: s.amount,
+      date: s.nextDate <= today ? s.nextDate : today,
+      accountId: s.accountId,
+      categoryId: s.categoryId,
+      comment: s.name,
+      subscriptionId: s.id,
+    })
+    await db.subscriptions.update(id, { nextDate: nextChargeDate(s.nextDate, s.period, s.anchorDay) })
+    return { transactionId, prevNextDate: s.nextDate }
+  })
+}
+
+/** «Пропустить»: это списание не состоялось — просто сдвигаем дату. */
+export async function skipSubscriptionCharge(id: string): Promise<string> {
+  const s = await db.subscriptions.get(id)
+  if (!s) throw new Error('Подписка не найдена')
+  await db.subscriptions.update(id, { nextDate: nextChargeDate(s.nextDate, s.period, s.anchorDay) })
+  return s.nextDate
+}
+
+/** Отмена «Проведено» / «Пропустить»: вернуть дату и (если была) удалить записанную трату. */
+export async function undoSubscriptionCharge(id: string, prevNextDate: string, transactionId?: string): Promise<void> {
+  await db.transaction('rw', db.subscriptions, db.transactions, async () => {
+    if (transactionId) await db.transactions.delete(transactionId)
+    await db.subscriptions.update(id, { nextDate: prevNextDate })
+  })
 }

@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo } from 'react'
 import { computeBalances } from '../lib/balance'
+import { DEFAULT_NOTICE_DAYS } from '../lib/subscriptions'
 import { db } from './db'
 import { getMeta, loadBudgetContext, META } from './repo'
 import type { Account, Category, Transaction } from './types'
@@ -46,4 +47,14 @@ export function useBudgetContext() {
 
 export function useCarryOverspend(): boolean | undefined {
   return useLiveQuery(async () => (await getMeta<boolean>(META.carryOverspend)) ?? false, [])
+}
+
+/** Подписки, ближайшие — сверху. */
+export function useSubscriptions() {
+  return useLiveQuery(() => db.subscriptions.orderBy('nextDate').toArray(), [])
+}
+
+/** За сколько дней напоминать о списании (по умолчанию 3). */
+export function useNoticeDays(): number | undefined {
+  return useLiveQuery(async () => (await getMeta<number>(META.subscriptionNoticeDays)) ?? DEFAULT_NOTICE_DAYS, [])
 }

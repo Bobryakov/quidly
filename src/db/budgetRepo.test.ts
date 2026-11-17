@@ -127,7 +127,7 @@ describe('объединение категорий и бюджеты', () => {
   })
 })
 
-describe('обновление базы с версии 1', () => {
+describe('обновление базы с версии 1 (сразу до последней)', () => {
   it('данные этапа 2 сохраняются, новые таблицы появляются', async () => {
     const name = 'quidly-migration-test'
     await Dexie.delete(name)
@@ -149,12 +149,13 @@ describe('обновление базы с версии 1', () => {
     // Открываем новой версией приложения
     const v2 = new QuidlyDB(name)
     await v2.open()
-    expect(v2.verno).toBe(2)
+    expect(v2.verno).toBe(3)
     expect(await v2.accounts.get('acc')).toMatchObject({ name: 'Карта', initialBalance: 500 })
     expect(await v2.transactions.count()).toBe(1)
     expect(await v2.categories.count()).toBe(1) // стартовые категории повторно не добавляются
     expect(await v2.budgets.count()).toBe(0)
     expect(await v2.closings.count()).toBe(0)
+    expect(await v2.subscriptions.count()).toBe(0)
     v2.close()
     await Dexie.delete(name)
   })

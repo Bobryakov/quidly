@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { defaultCategories } from './seed'
-import type { Account, BudgetRecord, Category, MetaRecord, MonthClosing, Transaction } from './types'
+import type { Account, BudgetRecord, Category, MetaRecord, MonthClosing, Subscription, Transaction } from './types'
 
 /**
  * База данных Quidly в браузере (IndexedDB через Dexie).
@@ -16,6 +16,7 @@ export class QuidlyDB extends Dexie {
   meta!: EntityTable<MetaRecord, 'key'>
   budgets!: EntityTable<BudgetRecord, 'id'>
   closings!: EntityTable<MonthClosing, 'month'>
+  subscriptions!: EntityTable<Subscription, 'id'>
 
   constructor(name = 'quidly') {
     super(name)
@@ -35,6 +36,13 @@ export class QuidlyDB extends Dexie {
       closings: 'month',
     })
 
+    // Версия 3 — этап 4: подписки. Новая таблица + у операций появляется индекс по подписке
+    // (поле необязательное, старые операции не меняются).
+    this.version(3).stores({
+      subscriptions: 'id, nextDate, categoryId, accountId',
+      transactions: 'id, date, type, accountId, toAccountId, categoryId, createdAt, subscriptionId',
+    })
+
     // Стартовые категории кладутся один раз — при самом первом создании базы
     this.on('populate', (tx) => {
       tx.table('categories').bulkAdd(defaultCategories())
@@ -45,7 +53,7 @@ export class QuidlyDB extends Dexie {
 export const db = new QuidlyDB()
 
 /** Текущая версия схемы — пригодится для бэкапов (этап 8). */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 /**
  * Просим браузер не удалять наши данные при нехватке места.

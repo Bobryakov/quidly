@@ -3,8 +3,18 @@ import { Link } from 'react-router'
 import { EmptyState } from '../components/EmptyState'
 import { HomeBudgetCard } from '../components/HomeBudgetCard'
 import { MonthSummaryCard } from '../components/MonthSummaryCard'
+import { SubscriptionDue } from '../components/SubscriptionDue'
 import { TransactionRow } from '../components/TransactionRow'
-import { useAccounts, useBalances, useBudgetContext, useById, useCategories, useTransactions } from '../db/hooks'
+import {
+  useAccounts,
+  useBalances,
+  useBudgetContext,
+  useById,
+  useCategories,
+  useNoticeDays,
+  useSubscriptions,
+  useTransactions,
+} from '../db/hooks'
 import { sumByType, totalBalance } from '../lib/balance'
 import { budgetFor, pendingSummaryMonth } from '../lib/budget'
 import { monthKey, todayISO } from '../lib/dates'
@@ -19,8 +29,10 @@ export function HomePage() {
   const accById = useById(accounts)
   const [now] = useState(() => new Date())
   const budgetCtx = useBudgetContext()
+  const subscriptions = useSubscriptions()
+  const noticeDays = useNoticeDays()
 
-  if (!accounts || !transactions || !balances || !budgetCtx) return null
+  if (!accounts || !transactions || !balances || !budgetCtx || !subscriptions || noticeDays === undefined) return null
 
   const active = accounts.filter((a) => !a.archived)
   const total = totalBalance(accounts, balances)
@@ -55,6 +67,8 @@ export function HomePage() {
           </span>
         </div>
       </section>
+
+      <SubscriptionDue subscriptions={subscriptions} categories={catById} noticeDays={noticeDays} />
 
       {pending && <MonthSummaryCard key={pending} ctx={budgetCtx} month={pending} categories={catById} />}
 
