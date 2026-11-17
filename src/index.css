@@ -1,0 +1,25 @@
+@import 'tailwindcss';
+
+/* Тёмная тема включается классом .dark на <html> */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  @apply bg-violet-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Цифры одинаковой ширины — суммы не «прыгают» */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
