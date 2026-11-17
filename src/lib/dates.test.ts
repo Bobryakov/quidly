@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, dayTitle, isoToRu, monthTitle, shiftMonth, shortDayLabel, toISODate } from './dates'
+import { addDays, dayTitle, isoToRu, monthGenitive, monthLower, monthTitle, shiftMonth, shortDayLabel, toISODate } from './dates'
 
 describe('даты', () => {
   it('ГГГГ-ММ-ДД по местному времени', () => {
@@ -25,5 +25,7 @@ describe('даты', () => {
     expect(shiftMonth('2026-01', -1)).toBe('2025-12')
     expect(shiftMonth('2026-12', 1)).toBe('2027-01')
     expect(monthTitle('2026-11')).toBe('Ноябрь 2026')
+    expect(monthGenitive('2026-10')).toBe('октября')
+    expect(monthLower('2026-05')).toBe('май')
   })
 })

@@ -26,6 +26,8 @@ export interface Category {
   color: string
   order: number
   createdAt: number
+  /** Переносить неистраченный остаток бюджета на следующий месяц (по умолчанию — да). */
+  budgetRollover?: boolean
 }
 
 export type TransactionType = 'expense' | 'income' | 'transfer'
@@ -51,4 +53,39 @@ export interface Transaction {
 export interface MetaRecord {
   key: string
   value: unknown
+}
+
+// ---------- бюджеты (схема v2) ----------
+
+/** Особый «id категории» для общего месячного лимита. */
+export const TOTAL_BUDGET = 'total'
+
+/**
+ * Лимит категории (или общий), действующий с месяца `fromMonth` и до следующей записи.
+ * limit = null — бюджет снят с этого месяца.
+ */
+export interface BudgetRecord {
+  id: string
+  categoryId: string
+  /** В копейках; null — бюджета нет */
+  limit: number | null
+  /** 'ГГГГ-ММ' */
+  fromMonth: string
+}
+
+/** Что сделать с остатком категории при закрытии месяца. */
+export type CloseAction = { type: 'carry' } | { type: 'reset' } | { type: 'cover'; to: string }
+
+/** Итоги закрытого месяца: решения и рассчитанные переносы на следующий месяц. */
+export interface MonthClosing {
+  /** Закрытый месяц 'ГГГГ-ММ' */
+  month: string
+  closedAt: number
+  /** true — закрыт автоматически (через 7 дней без решения) */
+  auto: boolean
+  actions: Record<string, CloseAction>
+  /** Сколько переходит в лимит следующего месяца по каждой категории (копейки, может быть < 0) */
+  carries: Record<string, number>
+  /** Сколько перерасхода каждой категории покрыто остатками других */
+  covered: Record<string, number>
 }

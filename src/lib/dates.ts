@@ -69,3 +69,13 @@ export function monthTitle(key: string): string {
   const [y, m] = key.split('-').map(Number)
   return `${MONTHS_NOM[m - 1]} ${y}`
 }
+
+/** 'ГГГГ-ММ' → «октября» (для «Итоги октября») */
+export function monthGenitive(key: string): string {
+  return MONTHS_GEN[Number(key.slice(5, 7)) - 1]
+}
+
+/** 'ГГГГ-ММ' → «ноябрь» (для «Бюджет на ноябрь») */
+export function monthLower(key: string): string {
+  return MONTHS_NOM[Number(key.slice(5, 7)) - 1].toLowerCase()
+}

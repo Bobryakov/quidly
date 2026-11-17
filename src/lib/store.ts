@@ -26,10 +26,13 @@ export type QuickAddState = { open: false } | { open: true; editId?: string; non
 
 export const quickAdd = createStore<QuickAddState>({ open: false })
 
+let openCounter = 0
+
 export function openQuickAdd(editId?: string) {
   // Плашка «Записано» не должна закрывать категории в только что открытой панели
   hideToast()
-  quickAdd.set({ open: true, editId, nonce: Date.now() })
+  // Номер открытия: каждое открытие — новая пустая форма (не время: два открытия в одну миллисекунду совпали бы)
+  quickAdd.set({ open: true, editId, nonce: ++openCounter })
 }
 
 export function closeQuickAdd() {

@@ -11,10 +11,10 @@ const THEMES: { value: ThemeChoice; label: string; emoji: string }[] = [
 const READY = [
   { to: '/settings/accounts', emoji: '💳', label: 'Счета' },
   { to: '/settings/categories', emoji: '🏷️', label: 'Категории' },
+  { to: '/budgets', emoji: '🎯', label: 'Бюджеты' },
 ]
 
 const COMING_SOON = [
-  { emoji: '🎯', label: 'Бюджеты', stage: 3 },
   { emoji: '🔁', label: 'Подписки', stage: 4 },
   { emoji: '📥', label: 'Импорт выписок', stage: 7 },
   { emoji: '🔒', label: 'PIN и автоблокировка', stage: 8 },

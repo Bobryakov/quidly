@@ -1,5 +1,15 @@
 import { db } from './db'
-import type { Account, AccountType, Category, CategoryKind, Transaction, TransactionType } from './types'
+import { budgetFor, closeMonth, defaultActions, monthsToAutoClose, type BudgetContext } from '../lib/budget'
+import type {
+  Account,
+  AccountType,
+  Category,
+  CategoryKind,
+  CloseAction,
+  MonthClosing,
+  Transaction,
+  TransactionType,
+} from './types'
 
 // Все изменения данных идут через эти функции — так проверки в одном месте.
 
@@ -19,6 +29,8 @@ export async function setMeta(key: string, value: unknown): Promise<void> {
 
 export const META = {
   lastAccountId: 'lastAccountId',
+  /** Переносить перерасход бюджета минусом на следующий месяц (по умолчанию — нет) */
+  carryOverspend: 'carryOverspend',
 } as const
 
 // ---------- счета ----------
@@ -179,7 +191,10 @@ export async function createCategory(input: CategoryInput): Promise<string> {
 }
 
 /** Переименовать, сменить эмодзи или цвет. Тип (расход/доход) не меняется. */
-export async function updateCategory(id: string, patch: Partial<Omit<CategoryInput, 'kind'>>) {
+export async function updateCategory(
+  id: string,
+  patch: Partial<Omit<CategoryInput, 'kind'>> & { budgetRollover?: boolean },
+) {
   const current = await db.categories.get(id)
   if (!current) throw new Error('Категория не найдена')
   const next: Category = { ...current, ...patch }
@@ -197,7 +212,7 @@ export async function categoryUsageCount(id: string): Promise<number> {
  */
 export async function mergeCategories(fromId: string, toId: string): Promise<number> {
   if (fromId === toId) throw new Error('Нельзя объединить категорию саму с собой')
-  return db.transaction('rw', db.categories, db.transactions, async () => {
+  return db.transaction('rw', db.categories, db.transactions, db.budgets, async () => {
     const [from, to] = await Promise.all([db.categories.get(fromId), db.categories.get(toId)])
     if (!from || !to) throw new Error('Категория не найдена')
     if (from.kind !== to.kind) throw new Error('Объединять можно только расходы с расходами, доходы с доходами')
@@ -205,6 +220,11 @@ export async function mergeCategories(fromId: string, toId: string): Promise<num
       .where('categoryId')
       .equals(fromId)
       .modify({ categoryId: toId, updatedAt: Date.now() })
+    // Бюджет: если у категории-получателя своего бюджета нет — он переходит к ней,
+    // иначе остаётся бюджет получателя, а бюджет исходной категории удаляется.
+    const targetHasBudget = (await db.budgets.where('categoryId').equals(toId).count()) > 0
+    if (targetHasBudget) await db.budgets.where('categoryId').equals(fromId).delete()
+    else await db.budgets.where('categoryId').equals(fromId).modify({ categoryId: toId })
     await db.categories.delete(fromId)
     return moved
   })
@@ -220,4 +240,68 @@ export async function deleteCategory(id: string): Promise<void> {
     throw new Error('Должна остаться хотя бы одна категория')
   }
   await db.categories.delete(id)
+}
+
+// ---------- бюджеты ----------
+
+/**
+ * Задать лимит категории (или общий — categoryId = TOTAL_BUDGET) начиная с месяца `month`.
+ * limit = null — убрать бюджет с этого месяца. Прошлые месяцы не меняются.
+ */
+export async function setBudget(categoryId: string, limit: number | null, month: string): Promise<void> {
+  if (limit !== null && (!Number.isInteger(limit) || limit < 0)) throw new Error('Лимит должен быть не меньше нуля')
+  await db.transaction('rw', db.budgets, async () => {
+    const same = await db.budgets.where('categoryId').equals(categoryId).filter((r) => r.fromMonth === month).first()
+    if (same) await db.budgets.update(same.id, { limit })
+    else await db.budgets.add({ id: newId(), categoryId, limit, fromMonth: month })
+  })
+}
+
+/** Всё, что нужно для расчёта бюджета, одним снимком из базы. */
+export async function loadBudgetContext(): Promise<BudgetContext> {
+  const [records, transactions, categories, closings, carryOverspend] = await Promise.all([
+    db.budgets.toArray(),
+    db.transactions.toArray(),
+    db.categories.orderBy('order').toArray(),
+    db.closings.toArray(),
+    getMeta<boolean>(META.carryOverspend),
+  ])
+  const expense = categories.filter((c) => c.kind === 'expense')
+  return {
+    records,
+    transactions,
+    categoryIds: expense.map((c) => c.id),
+    closings: new Map(closings.map((c) => [c.month, c])),
+    rolloverOff: new Set(expense.filter((c) => c.budgetRollover === false).map((c) => c.id)),
+    carryOverspend: carryOverspend ?? false,
+  }
+}
+
+/** Закрыть месяц: записать решения по остаткам и рассчитанные переносы. */
+export async function closeBudgetMonth(
+  month: string,
+  actions?: Record<string, CloseAction>,
+  auto = false,
+): Promise<MonthClosing> {
+  const ctx = await loadBudgetContext()
+  if (ctx.closings.has(month)) throw new Error('Итоги этого месяца уже подведены')
+  const mb = budgetFor(ctx, month)
+  const chosen = actions ?? defaultActions(mb, ctx.rolloverOff)
+  const closing: MonthClosing = {
+    month,
+    closedAt: Date.now(),
+    auto,
+    actions: chosen,
+    ...closeMonth(mb, chosen, ctx),
+  }
+  await db.closings.add(closing)
+  return closing
+}
+
+/** При запуске: закрыть по умолчанию месяцы, по которым никто не принял решение (через 7 дней). */
+export async function autoCloseMonths(today: string): Promise<string[]> {
+  const ctx = await loadBudgetContext()
+  const months = monthsToAutoClose(ctx, today)
+  for (const m of months) await closeBudgetMonth(m, undefined, true)
+  return months
 }

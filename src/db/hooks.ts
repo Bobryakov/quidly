@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo } from 'react'
 import { computeBalances } from '../lib/balance'
 import { db } from './db'
-import { getMeta, META } from './repo'
+import { getMeta, loadBudgetContext, META } from './repo'
 import type { Account, Category, Transaction } from './types'
 
 // Хуки читают данные из базы и сами обновляют экран при любых изменениях.
@@ -37,4 +37,13 @@ export function useBalances(accounts?: Account[], transactions?: Transaction[]) 
 
 export function useById<T extends { id: string }>(list: T[] | undefined): Map<string, T> {
   return useMemo(() => new Map((list ?? []).map((x) => [x.id, x])), [list])
+}
+
+/** Всё для расчёта бюджетов; обновляется само при любых изменениях. */
+export function useBudgetContext() {
+  return useLiveQuery(() => loadBudgetContext(), [])
+}
+
+export function useCarryOverspend(): boolean | undefined {
+  return useLiveQuery(async () => (await getMeta<boolean>(META.carryOverspend)) ?? false, [])
 }

@@ -4,6 +4,7 @@ import { BottomNav } from './components/BottomNav'
 import { QuickAddButton, QuickAddSheet } from './components/QuickAdd'
 import { ToastHost } from './components/ToastHost'
 import { useAccounts } from './db/hooks'
+import { BudgetsPage } from './pages/BudgetsPage'
 import { HomePage } from './pages/HomePage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { OperationsPage } from './pages/OperationsPage'
@@ -51,6 +52,7 @@ export function AppRoutes() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/settings/accounts" element={<AccountsPage />} />
           <Route path="/settings/categories" element={<CategoriesPage />} />
+          <Route path="/budgets" element={<BudgetsPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
       </main>

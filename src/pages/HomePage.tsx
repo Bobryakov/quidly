@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { EmptyState } from '../components/EmptyState'
+import { HomeBudgetCard } from '../components/HomeBudgetCard'
+import { MonthSummaryCard } from '../components/MonthSummaryCard'
 import { TransactionRow } from '../components/TransactionRow'
-import { useAccounts, useBalances, useById, useCategories, useTransactions } from '../db/hooks'
+import { useAccounts, useBalances, useBudgetContext, useById, useCategories, useTransactions } from '../db/hooks'
 import { sumByType, totalBalance } from '../lib/balance'
+import { budgetFor, pendingSummaryMonth } from '../lib/budget'
 import { monthKey, todayISO } from '../lib/dates'
 import { formatDate, formatMoney } from '../lib/format'
 
@@ -15,14 +18,17 @@ export function HomePage() {
   const catById = useById(categories)
   const accById = useById(accounts)
   const [now] = useState(() => new Date())
+  const budgetCtx = useBudgetContext()
 
-  if (!accounts || !transactions || !balances) return null
+  if (!accounts || !transactions || !balances || !budgetCtx) return null
 
   const active = accounts.filter((a) => !a.archived)
   const total = totalBalance(accounts, balances)
   const month = monthKey(todayISO())
   const { expense, income } = sumByType(transactions.filter((t) => monthKey(t.date) === month))
   const recent = transactions.slice(0, 5)
+  const mb = budgetFor(budgetCtx, month)
+  const pending = pendingSummaryMonth(budgetCtx, todayISO())
 
   return (
     <div className="space-y-4">
@@ -49,6 +55,10 @@ export function HomePage() {
           </span>
         </div>
       </section>
+
+      {pending && <MonthSummaryCard key={pending} ctx={budgetCtx} month={pending} categories={catById} />}
+
+      <HomeBudgetCard mb={mb} categories={catById} />
 
       {/* Счета */}
       <section aria-label="Счета" className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-1">
