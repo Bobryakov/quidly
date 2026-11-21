@@ -11,6 +11,7 @@ import { parseAmount } from '../../lib/amount'
 import { initialBalanceForTarget } from '../../lib/balance'
 import { formatMoney } from '../../lib/format'
 import { showToast } from '../../lib/store'
+import { askConfirm } from '../../components/ConfirmHost'
 
 type Editing = { mode: 'new' } | { mode: 'edit'; account: Account }
 
@@ -134,7 +135,7 @@ function AccountForm({
     if ((await accountUsageCount(a!.id)) > 0) {
       return setError('У счёта есть операции — его можно только убрать в архив')
     }
-    if (!window.confirm(`Удалить счёт «${a!.name}»?`)) return
+    if (!(await askConfirm({ title: `Удалить счёт «${a!.name}»?`, text: 'Операций по нему нет.', confirmLabel: 'Удалить' }))) return
     await deleteAccount(a!.id)
     onDone()
   }

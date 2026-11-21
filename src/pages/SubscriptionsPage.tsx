@@ -12,6 +12,7 @@ import { shortDayLabel, todayISO } from '../lib/dates'
 import { formatMoney, plural } from '../lib/format'
 import { showToast } from '../lib/store'
 import { daysBetween, monthlyEquivalent, monthlyTotal, NOTICE_DAYS_OPTIONS, PERIODS, relativeDay } from '../lib/subscriptions'
+import { askConfirm } from '../components/ConfirmHost'
 
 const money = (k: number) => formatMoney(k, { hideZeroKopecks: true })
 /** Суммы «в пересчёте» — примерные, показываем до рубля */
@@ -162,7 +163,8 @@ function SubscriptionForm({ editing, onDone }: { editing: Editing; onDone: () =>
   }
 
   const remove = async () => {
-    if (!window.confirm(`Удалить подписку «${s!.name}»? Уже записанные траты останутся.`)) return
+    const ok = await askConfirm({ title: `Удалить подписку «${s!.name}»?`, text: 'Уже записанные траты останутся.', confirmLabel: 'Удалить' })
+    if (!ok) return
     await deleteSubscription(s!.id)
     showToast('🗑 Подписка удалена')
     onDone()

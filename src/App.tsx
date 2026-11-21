@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { HashRouter, Route, Routes, useLocation } from 'react-router'
 import { BottomNav } from './components/BottomNav'
+import { ConfirmHost } from './components/ConfirmHost'
 import { Confetti } from './components/Confetti'
 import { LockGate } from './components/LockGate'
 import { QuickAddButton, QuickAddSheet } from './components/QuickAdd'
@@ -26,6 +27,9 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const ImportPage = lazy(() => import('./pages/ImportPage'))
 // Экспорт тоже использует библиотеку Excel
 const ExportPage = lazy(() => import('./pages/settings/ExportPage'))
+
+/** Экраны, где есть кнопка «+» (в «Настройках» она закрывала выбор темы, а добавлять трату оттуда незачем). */
+const MAIN_SCREENS = ['/', '/operations', '/analytics', '/goals']
 
 // HashRouter: адреса экранов вида /quidly/#/settings.
 // Так GitHub Pages не выдаёт «страница не найдена» при обновлении экрана.
@@ -96,11 +100,12 @@ export function AppRoutes() {
           <Route path="*" element={<HomePage />} />
         </Routes>
       </main>
-      {/* На экране импорта внизу своя кнопка «Импортировать» — «+» там мешает */}
-      {pathname !== '/import' && <QuickAddButton />}
+      {/* «+» — только на основных экранах; на остальных он мешает */}
+      {MAIN_SCREENS.includes(pathname) && <QuickAddButton />}
       <BottomNav />
       <QuickAddSheet />
       <ToastHost />
+      <ConfirmHost />
       <Confetti />
     </>
   )

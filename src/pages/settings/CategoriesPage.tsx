@@ -10,6 +10,7 @@ import type { Category, CategoryKind } from '../../db/types'
 import { opsWord } from '../../lib/format'
 import { showToast } from '../../lib/store'
 import { BackLink } from './AccountsPage'
+import { askConfirm } from '../../components/ConfirmHost'
 
 type Editing = { mode: 'new'; kind: CategoryKind } | { mode: 'edit'; category: Category }
 
@@ -124,7 +125,7 @@ function CategoryForm({
       setMerging(true)
       return
     }
-    if (!window.confirm(`Удалить категорию «${c!.name}»?`)) return
+    if (!(await askConfirm({ title: `Удалить категорию «${c!.name}»?`, text: 'Операций в ней нет.', confirmLabel: 'Удалить' }))) return
     try {
       await deleteCategory(c!.id)
       onDone()
@@ -134,11 +135,12 @@ function CategoryForm({
   }
 
   const mergeInto = async (target: Category) => {
-    const msg =
-      usageCount > 0
-        ? `Перенести ${opsWord(usageCount)} из «${c!.name}» в «${target.name}» и удалить «${c!.name}»?`
-        : `Удалить «${c!.name}» (объединить с «${target.name}»)?`
-    if (!window.confirm(msg)) return
+    const ok = await askConfirm({
+      title: usageCount > 0 ? `Перенести ${opsWord(usageCount)} в «${target.name}»?` : `Объединить с «${target.name}»?`,
+      text: `Категория «${c!.name}» удалится, её бюджеты, подписки и правила импорта перейдут в «${target.name}».`,
+      confirmLabel: 'Объединить',
+    })
+    if (!ok) return
     try {
       const moved = await mergeCategories(c!.id, target.id)
       showToast(`🔀 Готово: ${opsWord(moved)} теперь в «${target.name}»`)

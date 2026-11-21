@@ -149,3 +149,37 @@ describe('каркас', () => {
     expect(localStorage.getItem('quidly-theme')).toBe('dark')
   })
 })
+
+describe('кнопка «+»', () => {
+  it('есть на основных экранах и нет в настройках', async () => {
+    await finishOnboarding([{ name: 'Карта', type: 'card', emoji: '💳', color: '#000', initialBalance: 0 }])
+    const { unmount } = renderAt('/operations')
+    expect(await screen.findByRole('button', { name: 'Добавить операцию' })).toBeInTheDocument()
+    unmount()
+    renderAt('/settings/backup')
+    expect(await screen.findByRole('heading', { name: 'Резервная копия' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Добавить операцию' })).not.toBeInTheDocument()
+    // в меню подсвечены «Настройки»
+    expect(within(screen.getByRole('navigation', { name: 'Основное меню' })).getByRole('link', { name: /Настройки/ })).toHaveClass('text-violet-600')
+  })
+})
+
+describe('окно подтверждения', () => {
+  it('удаление категории: «Отмена» оставляет, «Удалить» удаляет — без системных окон браузера', async () => {
+    await finishOnboarding([{ name: 'Карта', type: 'card', emoji: '💳', color: '#000', initialBalance: 0 }])
+    const sys = vi.spyOn(window, 'confirm')
+    renderAt('/settings/categories')
+    fireEvent.click(await screen.findByRole('button', { name: /ЖКХ/ }))
+    fireEvent.click(await screen.findByRole('button', { name: '🗑 Удалить' }))
+    let dlg = await screen.findByRole('alertdialog', { name: 'Удалить категорию «ЖКХ»?' })
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Отмена' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+    expect(await db.categories.get('seed-expense-14')).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button', { name: '🗑 Удалить' }))
+    dlg = await screen.findByRole('alertdialog', { name: 'Удалить категорию «ЖКХ»?' })
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Удалить' }))
+    await waitFor(async () => expect(await db.categories.get('seed-expense-14')).toBeUndefined())
+    expect(sys).not.toHaveBeenCalled()
+  })
+})

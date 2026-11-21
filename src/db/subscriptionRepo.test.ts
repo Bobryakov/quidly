@@ -116,7 +116,7 @@ describe('обновление базы с версии 2', () => {
 
     const v3 = new QuidlyDB(name)
     await v3.open()
-    expect(v3.verno).toBe(5)
+    expect(v3.verno).toBe(6)
     expect(await v3.transactions.get('t1')).toMatchObject({ amount: 100 })
     expect(await v3.budgets.get('b1')).toMatchObject({ limit: 500 })
     expect(await v3.closings.get('2026-10')).toMatchObject({ carries: { c: 5 } })

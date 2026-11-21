@@ -12,6 +12,7 @@ import { formatMoney, plural } from '../lib/format'
 import { goalBalances, goalPercent, goalPlan, totalSaved } from '../lib/goals'
 import { celebrate, showToast } from '../lib/store'
 import { daysBetween, relativeDay } from '../lib/subscriptions'
+import { askConfirm } from '../components/ConfirmHost'
 
 const money = (k: number) => formatMoney(k, { hideZeroKopecks: true })
 
@@ -164,11 +165,15 @@ function GoalDetails({
   }
 
   const remove = async () => {
-    const msg =
-      balance > 0
-        ? `Удалить копилку «${goal.name}»? Отложенные ${money(balance)} перестанут считаться отложенными (на счетах ничего не изменится).`
-        : `Удалить копилку «${goal.name}»?`
-    if (!window.confirm(msg)) return
+    const ok = await askConfirm({
+      title: `Удалить копилку «${goal.name}»?`,
+      text:
+        balance > 0
+          ? `Отложенные ${money(balance)} перестанут считаться отложенными. На счетах ничего не изменится.`
+          : 'История пополнений тоже удалится.',
+      confirmLabel: 'Удалить',
+    })
+    if (!ok) return
     await deleteGoal(goal.id)
     showToast('🗑 Копилка удалена')
     onDone()

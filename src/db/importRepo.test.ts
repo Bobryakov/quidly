@@ -144,7 +144,7 @@ describe('обновление базы с версии 4', () => {
 
     const v5 = new QuidlyDB(name)
     await v5.open()
-    expect(v5.verno).toBe(5)
+    expect(v5.verno).toBe(6)
     expect(await v5.goals.get('g')).toMatchObject({ name: 'Отпуск' })
     expect(await v5.transactions.get('t1')).toMatchObject({ amount: 100 })
     expect(await v5.importRules.count()).toBe(0)

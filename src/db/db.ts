@@ -1,5 +1,5 @@
-import Dexie, { type EntityTable } from 'dexie'
-import { defaultCategories } from './seed'
+import Dexie, { type EntityTable, type Table } from 'dexie'
+import { defaultCategories, withNewSeedCategories } from './seed'
 import type {
   Account,
   BudgetRecord,
@@ -70,6 +70,13 @@ export class QuidlyDB extends Dexie {
       transactions: 'id, date, type, accountId, toAccountId, categoryId, createdAt, subscriptionId, importKey',
     })
 
+    // Версия 6 — этап 9: новые стартовые категории «Кредиты» и «ЖКХ».
+    // Таблицы не меняются; у тех, кто уже пользуется приложением, категории добавляются
+    // перед «Прочее» — если человек не завёл такие сам (сравниваем по названию).
+    this.version(6)
+      .stores({})
+      .upgrade((tx) => addMissingSeedCategories(tx.table('categories')))
+
     // Стартовые категории кладутся один раз — при самом первом создании базы
     this.on('populate', (tx) => {
       tx.table('categories').bulkAdd(defaultCategories())
@@ -77,10 +84,19 @@ export class QuidlyDB extends Dexie {
   }
 }
 
+/** Добавить новые стартовые категории (миграция v6). Повторный вызов ничего не задваивает. */
+export async function addMissingSeedCategories(categories: Table<Category, string>): Promise<number> {
+  const all = await categories.toArray()
+  const next = withNewSeedCategories(all)
+  if (next.length === all.length) return 0
+  await categories.bulkPut(next)
+  return next.length - all.length
+}
+
 export const db = new QuidlyDB()
 
-/** Текущая версия схемы — пригодится для бэкапов (этап 8). */
-export const SCHEMA_VERSION = 5
+/** Текущая версия схемы — записывается в резервные копии (этап 8). */
+export const SCHEMA_VERSION = 6
 
 /**
  * Просим браузер не удалять наши данные при нехватке места.

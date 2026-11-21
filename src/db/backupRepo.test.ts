@@ -97,7 +97,8 @@ describe('резервная копия базы', () => {
     const balances = computeBalances(await db.accounts.toArray(), await db.transactions.toArray())
     expect(balances.get('a')).toBe(40000)
     expect(await db.goals.count()).toBe(0)
-    expect(await db.categories.count()).toBe(1)
+    // старая копия дополняется новыми категориями, как и база при обновлении
+    expect((await db.categories.toArray()).map((c) => c.name).sort()).toEqual(['ЖКХ', 'Кредиты', 'Продукты'])
   })
 
   it('отметка о сохранённой копии сбрасывает «Завтра»', async () => {

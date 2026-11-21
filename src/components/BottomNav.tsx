@@ -1,4 +1,7 @@
-import { NavLink } from 'react-router'
+import { NavLink, useLocation } from 'react-router'
+
+/** Экраны, которые открываются из «Настроек»: в меню при них подсвечены «Настройки». */
+const SETTINGS_PATHS = ['/settings', '/budgets', '/subscriptions', '/import']
 
 const NAV_ITEMS = [
   { to: '/', label: 'Главная', emoji: '🏠' },
@@ -9,6 +12,8 @@ const NAV_ITEMS = [
 ] as const
 
 export function BottomNav() {
+  const { pathname } = useLocation()
+  const inSettings = SETTINGS_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))
   return (
     <nav
       aria-label="Основное меню"
@@ -16,33 +21,34 @@ export function BottomNav() {
       style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
       <ul className="mx-auto flex max-w-lg">
-        {NAV_ITEMS.map((item) => (
-          <li key={item.to} className="flex-1">
-            <NavLink
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                `flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
-                  isActive
-                    ? 'text-violet-600 dark:text-violet-400'
-                    : 'text-slate-500 dark:text-slate-400'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span
-                    aria-hidden
-                    className={`text-2xl leading-none transition-transform ${isActive ? 'scale-110' : 'opacity-70 grayscale'}`}
-                  >
-                    {item.emoji}
-                  </span>
-                  {item.label}
-                </>
-              )}
-            </NavLink>
-          </li>
-        ))}
+        {NAV_ITEMS.map((item) => {
+          const active = (exact: boolean) => exact || (item.to === '/settings' && inSettings)
+          return (
+            <li key={item.to} className="flex-1">
+              <NavLink
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  `flex flex-col items-center gap-0.5 py-2 text-[11px] font-medium transition-colors ${
+                    active(isActive) ? 'text-violet-600 dark:text-violet-400' : 'text-slate-500 dark:text-slate-400'
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <span
+                      aria-hidden
+                      className={`text-2xl leading-none transition-transform ${active(isActive) ? 'scale-110' : 'opacity-70 grayscale'}`}
+                    >
+                      {item.emoji}
+                    </span>
+                    {item.label}
+                  </>
+                )}
+              </NavLink>
+            </li>
+          )
+        })}
       </ul>
     </nav>
   )

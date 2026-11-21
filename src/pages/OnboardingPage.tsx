@@ -68,18 +68,6 @@ export function OnboardingPage() {
         {rows.map((r) => (
           <div key={r.key} className="rounded-3xl bg-white p-4 shadow-sm dark:bg-slate-900">
             <div className="flex items-center gap-2">
-              <select
-                value={r.type}
-                onChange={(e) => set(r.key, { type: e.target.value as AccountType })}
-                aria-label="Тип счёта"
-                className="rounded-xl bg-slate-100 px-2 py-2 text-xl dark:bg-slate-800"
-              >
-                {Object.entries(ACCOUNT_TYPES).map(([value, t]) => (
-                  <option key={value} value={value}>
-                    {t.emoji} {t.label}
-                  </option>
-                ))}
-              </select>
               <input
                 value={r.name}
                 onChange={(e) => set(r.key, { name: e.target.value })}
@@ -97,6 +85,24 @@ export function OnboardingPage() {
                   ✕
                 </button>
               )}
+            </div>
+            <div className="mt-2 flex gap-1.5" role="radiogroup" aria-label={`Тип счёта: ${r.name || 'новый'}`}>
+              {(Object.entries(ACCOUNT_TYPES) as [AccountType, (typeof ACCOUNT_TYPES)[AccountType]][]).map(([value, t]) => (
+                <button
+                  key={value}
+                  type="button"
+                  role="radio"
+                  aria-checked={r.type === value}
+                  onClick={() => set(r.key, { type: value })}
+                  className={`rounded-full px-3 py-1 text-sm font-medium ${
+                    r.type === value
+                      ? 'bg-violet-100 text-violet-700 dark:bg-violet-500/20 dark:text-violet-300'
+                      : 'text-slate-500 dark:text-slate-400'
+                  }`}
+                >
+                  {t.emoji} {t.label}
+                </button>
+              ))}
             </div>
             <label className="mt-3 flex items-center gap-2">
               <span className="text-sm text-slate-500 dark:text-slate-400">Сейчас на счёте</span>

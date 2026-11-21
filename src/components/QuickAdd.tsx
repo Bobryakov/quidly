@@ -20,13 +20,39 @@ import { Keypad } from './Keypad'
 import { CloseButton, Sheet } from './Sheet'
 
 /** Круглая кнопка «+» над нижним меню. */
+/**
+ * Прячем «+», пока список листают вниз: так кнопка не закрывает суммы и кнопки внизу экрана.
+ * Появляется снова, если листнуть вверх, вернуться к началу или долистать до конца.
+ */
+export function useHideOnScroll(): boolean {
+  const [hidden, setHidden] = useState(false)
+  useEffect(() => {
+    let last = window.scrollY
+    const onScroll = () => {
+      const y = window.scrollY
+      const atBottom = window.innerHeight + y >= document.documentElement.scrollHeight - 24
+      if (y < 80 || atBottom) setHidden(false)
+      else if (y > last + 6) setHidden(true)
+      else if (y < last - 6) setHidden(false)
+      last = y
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+  return hidden
+}
+
 export function QuickAddButton() {
+  const hidden = useHideOnScroll()
   return (
     <motion.button
       type="button"
       aria-label="Добавить операцию"
       onClick={() => openQuickAdd()}
       whileTap={{ scale: 0.9 }}
+      animate={{ y: hidden ? 140 : 0, opacity: hidden ? 0 : 1 }}
+      transition={{ duration: 0.2 }}
+      tabIndex={hidden ? -1 : 0}
       className="fixed right-5 z-30 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-violet-500 to-pink-500 text-4xl font-light text-white shadow-lg shadow-pink-500/30"
       style={{ bottom: 'calc(env(safe-area-inset-bottom) + 76px)' }}
     >

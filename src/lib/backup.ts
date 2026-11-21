@@ -10,6 +10,7 @@ import type {
   Subscription,
   Transaction,
 } from '../db/types'
+import { withNewSeedCategories } from '../db/seed'
 import { fromB64, randomBytes, sha256, toB64, toHex } from './security/bytes'
 
 /**
@@ -181,8 +182,8 @@ export async function openBackup(file: BackupFile, password?: string): Promise<O
 }
 
 /**
- * Миграции копий старых версий. Все изменения базы v1→v5 только добавляли таблицы и
- * необязательные поля, поэтому старой копии достаточно добавить пустые новые таблицы.
+ * Миграции копий старых версий. Изменения базы v1→v5 только добавляли таблицы и
+ * необязательные поля — старой копии достаточно добавить пустые новые таблицы; v6 добавила категории.
  * Если в будущей версии понадобится переделать данные — шаг добавляется здесь.
  */
 export function migrateBackup(data: Partial<BackupData>, fromVersion: number): BackupData {
@@ -190,6 +191,8 @@ export function migrateBackup(data: Partial<BackupData>, fromVersion: number): B
   for (const t of TABLES) {
     if (TABLE_SINCE[t] > fromVersion || out[t] === undefined) out[t] = (out[t] ?? []) as never
   }
+  // v6: новые стартовые категории «Кредиты» и «ЖКХ» — как и при обновлении базы
+  if (fromVersion < 6 && Array.isArray(out.categories)) out.categories = withNewSeedCategories(out.categories)
   return out
 }
 

@@ -24,16 +24,16 @@ function sample(): BackupData {
 const NOW = new Date(2026, 10, 21, 14, 5)
 
 async function roundTrip(text: string, password?: string) {
-  const parsed = parseBackup(text, 5)
+  const parsed = parseBackup(text, 6)
   if (!parsed.ok) return parsed
   return openBackup(parsed.file, password)
 }
 
 describe('резервная копия', () => {
   it('без пароля: сохраняется и читается обратно точь-в-точь, с версией базы', async () => {
-    const text = await buildBackup(sample(), { schemaVersion: 5, now: NOW })
+    const text = await buildBackup(sample(), { schemaVersion: 6, now: NOW })
     const file = JSON.parse(text)
-    expect(file).toMatchObject({ app: 'quidly', kind: 'backup', format: 1, schemaVersion: 5, createdAt: NOW.toISOString() })
+    expect(file).toMatchObject({ app: 'quidly', kind: 'backup', format: 1, schemaVersion: 6, createdAt: NOW.toISOString() })
     expect(file.checksum).toMatch(/^[0-9a-f]{64}$/)
     const r = await roundTrip(text)
     expect(r).toMatchObject({ ok: true })
@@ -45,7 +45,7 @@ describe('резервная копия', () => {
   })
 
   it('с паролем: в файле ничего не видно, без пароля и с неверным — не открывается', async () => {
-    const text = await buildBackup(sample(), { schemaVersion: 5, password: 'секрет123', iterations: FAST })
+    const text = await buildBackup(sample(), { schemaVersion: 6, password: 'секрет123', iterations: FAST })
     expect(text).not.toContain('Хлеб')
     expect(text).not.toContain('Карта')
     expect(JSON.parse(text).encrypted.iterations).toBe(FAST)
@@ -56,16 +56,16 @@ describe('резервная копия', () => {
   })
 
   it('по умолчанию ключ из пароля — 600 000 повторений', async () => {
-    const text = await buildBackup(sample(), { schemaVersion: 5, password: 'x' })
+    const text = await buildBackup(sample(), { schemaVersion: 6, password: 'x' })
     expect(JSON.parse(text).encrypted.iterations).toBe(600_000)
   })
 
   it('изменённый или испорченный файл не восстанавливается', async () => {
-    const file = JSON.parse(await buildBackup(sample(), { schemaVersion: 5 }))
+    const file = JSON.parse(await buildBackup(sample(), { schemaVersion: 6 }))
     file.data.transactions[0].amount = 1
     expect(await roundTrip(JSON.stringify(file))).toMatchObject({ ok: false, error: 'damaged' })
 
-    const enc = JSON.parse(await buildBackup(sample(), { schemaVersion: 5, password: 'pass12', iterations: FAST }))
+    const enc = JSON.parse(await buildBackup(sample(), { schemaVersion: 6, password: 'pass12', iterations: FAST }))
     enc.encrypted.ciphertext = enc.encrypted.ciphertext.replace(/^./, (c: string) => (c === 'A' ? 'B' : 'A'))
     // шифр с проверкой: любое изменение = «не открыть»
     expect(await roundTrip(JSON.stringify(enc), 'pass12')).toMatchObject({ ok: false })
@@ -81,7 +81,7 @@ describe('резервная копия', () => {
   })
 
   it('файл с невидимой меткой кодировки в начале тоже читается', async () => {
-    const text = '﻿' + (await buildBackup(sample(), { schemaVersion: 5 }))
+    const text = '﻿' + (await buildBackup(sample(), { schemaVersion: 6 }))
     expect(await roundTrip(text)).toMatchObject({ ok: true })
   })
 
@@ -99,6 +99,13 @@ describe('резервная копия', () => {
       expect(r.data.transactions).toEqual(s.transactions)
     }
     expect(Object.keys(migrateBackup(v1, 3)).sort()).toEqual(Object.keys(s).sort())
+  })
+
+  it('копия версии 5 получает новые категории «Кредиты» и «ЖКХ»; свою «жкх» не задваивает', async () => {
+    const s = sample()
+    s.categories.push({ id: 'my', name: 'жкх ', kind: 'expense', emoji: '💡', color: '#000', order: 5, createdAt: 1 })
+    const r = await roundTrip(await buildBackup(s, { schemaVersion: 5 }))
+    expect(r.ok && r.data.categories.map((c) => c.name)).toEqual(['Продукты', 'жкх ', 'Кредиты'])
   })
 
   it('проверка смысла данных', () => {

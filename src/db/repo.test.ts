@@ -1,6 +1,8 @@
+import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { resetDb } from '../test/resetDb'
-import { db } from './db'
+import { db, QuidlyDB } from './db'
+import { defaultCategories } from './seed'
 import {
   addTransaction,
   createAccount,
@@ -22,8 +24,12 @@ const card = { name: 'Карта', type: 'card' as const, emoji: '💳', color: 
 const cash = { name: 'Наличные', type: 'cash' as const, emoji: '💵', color: '#22c55e', initialBalance: 0 }
 
 describe('база данных', () => {
-  it('при первом запуске есть стартовые категории: 12 расходов и 4 дохода', async () => {
-    expect(await db.categories.where('kind').equals('expense').count()).toBe(12)
+  it('при первом запуске есть стартовые категории: 14 расходов и 4 дохода', async () => {
+    expect(await db.categories.where('kind').equals('expense').count()).toBe(14)
+    // «Кредиты» и «ЖКХ» — перед «Прочее», «Прочее» — последняя
+    const names = (await db.categories.where('kind').equals('expense').sortBy('order')).map((c) => c.name)
+    expect(names.slice(-3)).toEqual(['Кредиты', 'ЖКХ', 'Прочее'])
+    expect(new Set((await db.categories.toArray()).map((c) => c.order)).size).toBeGreaterThan(13)
     expect(await db.categories.where('kind').equals('income').count()).toBe(4)
     expect(await db.accounts.count()).toBe(0)
   })
@@ -106,5 +112,48 @@ describe('база данных', () => {
     const c = await createAccount({ ...cash, name: 'Пустой' })
     await deleteAccount(c)
     expect(await db.accounts.get(c)).toBeUndefined()
+  })
+})
+
+describe('обновление базы до версии 6: категории «Кредиты» и «ЖКХ»', () => {
+  it('добавляются перед «Прочее», порядок остальных сохраняется; своя «ЖКХ» не задваивается', async () => {
+    const name = 'quidly-v5-cats'
+    await Dexie.delete(name)
+    const v5 = new Dexie(name)
+    v5.version(5).stores({
+      accounts: 'id, order, archived',
+      categories: 'id, kind, order',
+      transactions: 'id, date, type, accountId, toAccountId, categoryId, createdAt, subscriptionId, importKey',
+      meta: 'key',
+      budgets: 'id, categoryId, fromMonth',
+      closings: 'month',
+      subscriptions: 'id, nextDate, categoryId, accountId',
+      goals: 'id, createdAt',
+      goalMoves: 'id, goalId, date',
+      importRules: 'id, pattern, categoryId',
+    })
+    await v5.open()
+    const old = defaultCategories(1).filter((c) => !['seed-expense-13', 'seed-expense-14'].includes(c.id))
+    // как было в версии 5: «Прочее» — последняя (order 11), плюс своя категория «ЖКХ» после неё
+    await v5.table('categories').bulkAdd(old.map((c) => (c.kind === 'expense' ? { ...c, order: Number(c.id.split('-')[2]) - 1 } : c)))
+    await v5.table('categories').add({ id: 'mine', name: 'Жкх', kind: 'expense', emoji: '💡', color: '#000', order: 12, createdAt: 2 })
+    v5.close()
+
+    const v6 = new QuidlyDB(name)
+    await v6.open()
+    expect(v6.verno).toBe(6)
+    const exp = await v6.categories.where('kind').equals('expense').sortBy('order')
+    expect(exp.map((c) => c.name)).toEqual([
+      'Продукты', 'Кафе', 'Транспорт', 'Дом', 'Здоровье', 'Подписки', 'Развлечения', 'Одежда', 'Подарки', 'Связь', 'Образование',
+      'Кредиты', 'Прочее', 'Жкх',
+    ])
+    expect(await v6.categories.get('seed-expense-14')).toBeUndefined()
+    // повторное открытие ничего не добавляет
+    v6.close()
+    const again = new QuidlyDB(name)
+    await again.open()
+    expect(await again.categories.count()).toBe(18)
+    again.close()
+    await Dexie.delete(name)
   })
 })
