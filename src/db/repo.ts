@@ -40,7 +40,32 @@ export const META = {
   carryOverspend: 'carryOverspend',
   /** За сколько дней напоминать о списании подписки (1 / 3 / 7, по умолчанию 3) */
   subscriptionNoticeDays: 'subscriptionNoticeDays',
+  /** Хеш PIN-кода (этап 8) — сам PIN не хранится */
+  pin: 'pin',
+  /** Неудачные попытки ввода PIN и пауза */
+  pinFails: 'pinFails',
+  /** Через сколько секунд в фоне блокировать (0 / 60 / 300 / 900) */
+  lockTimeout: 'lockTimeout',
+  /** Ключ входа по отпечатку/лицу */
+  biometric: 'biometric',
+  /** Когда последний раз сохраняли резервную копию (мс) */
+  lastBackupAt: 'lastBackupAt',
+  /** «Позже» у напоминания о копии — не показывать до этого момента (мс) */
+  backupSnoozeUntil: 'backupSnoozeUntil',
 } as const
+
+/**
+ * Настройки, которые относятся к этому телефону, а не к данным:
+ * в резервную копию не попадают и при восстановлении не меняются.
+ */
+export const DEVICE_META: readonly string[] = [
+  META.pin,
+  META.pinFails,
+  META.lockTimeout,
+  META.biometric,
+  META.lastBackupAt,
+  META.backupSnoozeUntil,
+]
 
 // ---------- счета ----------
 

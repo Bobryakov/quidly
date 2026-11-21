@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react'
 import { HashRouter, Route, Routes, useLocation } from 'react-router'
 import { BottomNav } from './components/BottomNav'
 import { Confetti } from './components/Confetti'
+import { LockGate } from './components/LockGate'
 import { QuickAddButton, QuickAddSheet } from './components/QuickAdd'
 import { ToastHost } from './components/ToastHost'
 import { useAccounts } from './db/hooks'
@@ -14,13 +15,17 @@ import { SettingsPage } from './pages/SettingsPage'
 import { SubscriptionsPage } from './pages/SubscriptionsPage'
 import { AccountsPage } from './pages/settings/AccountsPage'
 import { CategoriesPage } from './pages/settings/CategoriesPage'
+import { BackupPage } from './pages/settings/BackupPage'
 import { ImportRulesPage } from './pages/settings/ImportRulesPage'
+import { SecurityPage } from './pages/settings/SecurityPage'
 import { useApplyTheme } from './lib/theme'
 
 // Графики — тяжёлая библиотека, поэтому экран аналитики загружается, только когда его открывают
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 // Импорт тянет библиотеки чтения PDF и Excel — тоже грузится только при открытии
 const ImportPage = lazy(() => import('./pages/ImportPage'))
+// Экспорт тоже использует библиотеку Excel
+const ExportPage = lazy(() => import('./pages/settings/ExportPage'))
 
 // HashRouter: адреса экранов вида /quidly/#/settings.
 // Так GitHub Pages не выдаёт «страница не найдена» при обновлении экрана.
@@ -78,6 +83,16 @@ export function AppRoutes() {
             }
           />
           <Route path="/settings/import-rules" element={<ImportRulesPage />} />
+          <Route path="/settings/security" element={<SecurityPage />} />
+          <Route path="/settings/backup" element={<BackupPage />} />
+          <Route
+            path="/settings/export"
+            element={
+              <Suspense fallback={null}>
+                <ExportPage />
+              </Suspense>
+            }
+          />
           <Route path="*" element={<HomePage />} />
         </Routes>
       </main>
@@ -94,7 +109,9 @@ export function AppRoutes() {
 export default function App() {
   return (
     <HashRouter>
-      <AppRoutes />
+      <LockGate>
+        <AppRoutes />
+      </LockGate>
     </HashRouter>
   )
 }

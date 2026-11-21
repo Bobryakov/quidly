@@ -1,6 +1,8 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useMemo } from 'react'
 import { computeBalances } from '../lib/balance'
+import type { BiometricRecord } from '../lib/security/biometric'
+import { DEFAULT_LOCK_TIMEOUT, type PinRecord } from '../lib/security/pin'
 import { DEFAULT_NOTICE_DAYS } from '../lib/subscriptions'
 import { db } from './db'
 import { getMeta, loadBudgetContext, META } from './repo'
@@ -68,5 +70,33 @@ export function useGoalMoves() {
   return useLiveQuery(async () => {
     const all = await db.goalMoves.toArray()
     return all.sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1))
+  }, [])
+}
+
+/** Настройки защиты (этап 8): включён ли PIN, его длина, отпечаток, автоблокировка. */
+export function useSecurity() {
+  return useLiveQuery(async () => {
+    const [pin, biometric, lockTimeout] = await Promise.all([
+      getMeta<PinRecord>(META.pin),
+      getMeta<BiometricRecord>(META.biometric),
+      getMeta<number>(META.lockTimeout),
+    ])
+    return {
+      pinEnabled: !!pin,
+      pinLength: pin?.length ?? 0,
+      biometric: biometric ?? null,
+      lockTimeout: lockTimeout ?? DEFAULT_LOCK_TIMEOUT,
+    }
+  }, [])
+}
+
+/** Когда последний раз сохраняли резервную копию и до когда отложено напоминание. */
+export function useBackupInfo() {
+  return useLiveQuery(async () => {
+    const [lastBackupAt, snoozeUntil] = await Promise.all([
+      getMeta<number>(META.lastBackupAt),
+      getMeta<number>(META.backupSnoozeUntil),
+    ])
+    return { lastBackupAt: lastBackupAt ?? null, snoozeUntil: snoozeUntil ?? null }
   }, [])
 }

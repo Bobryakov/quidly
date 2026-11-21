@@ -17,10 +17,33 @@ const READY = [
   { to: '/settings/import-rules', emoji: '🪄', label: 'Правила импорта' },
 ]
 
-const COMING_SOON = [
-  { emoji: '🔒', label: 'PIN и автоблокировка', stage: 8 },
-  { emoji: '💾', label: 'Экспорт и бэкап', stage: 8 },
+const DATA = [
+  { to: '/settings/security', emoji: '🔒', label: 'PIN и блокировка' },
+  { to: '/settings/backup', emoji: '💾', label: 'Резервная копия' },
+  { to: '/settings/export', emoji: '📤', label: 'Экспорт в Excel / CSV' },
 ]
+
+function LinkList({ items }: { items: { to: string; emoji: string; label: string }[] }) {
+  return (
+    <section className="mb-4 rounded-3xl bg-white px-5 py-1 shadow-sm dark:bg-slate-900">
+      <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+        {items.map((item) => (
+          <li key={item.to}>
+            <Link to={item.to} className="flex items-center gap-3 py-3.5 font-medium">
+              <span className="text-xl" aria-hidden>
+                {item.emoji}
+              </span>
+              <span className="flex-1">{item.label}</span>
+              <span className="text-slate-400" aria-hidden>
+                ›
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
 
 export function SettingsPage() {
   const { choice, setChoice } = useTheme()
@@ -29,23 +52,8 @@ export function SettingsPage() {
     <>
       <PageHeader title="Настройки" />
 
-      <section className="mb-4 rounded-3xl bg-white px-5 py-1 shadow-sm dark:bg-slate-900">
-        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-          {READY.map((item) => (
-            <li key={item.to}>
-              <Link to={item.to} className="flex items-center gap-3 py-3.5 font-medium">
-                <span className="text-xl" aria-hidden>
-                  {item.emoji}
-                </span>
-                <span className="flex-1">{item.label}</span>
-                <span className="text-slate-400" aria-hidden>
-                  ›
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <LinkList items={READY} />
+      <LinkList items={DATA} />
 
       <section className="mb-4 rounded-3xl bg-white p-5 shadow-sm dark:bg-slate-900">
         <h2 className="mb-3 font-semibold">Тема</h2>
@@ -73,21 +81,6 @@ export function SettingsPage() {
             )
           })}
         </div>
-      </section>
-
-      <section className="mb-4 rounded-3xl bg-white p-5 shadow-sm dark:bg-slate-900">
-        <h2 className="mb-2 font-semibold">Скоро</h2>
-        <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-          {COMING_SOON.map((item) => (
-            <li key={item.label} className="flex items-center gap-3 py-3 text-slate-400 dark:text-slate-500">
-              <span className="text-xl grayscale" aria-hidden>
-                {item.emoji}
-              </span>
-              <span className="flex-1">{item.label}</span>
-              <span className="text-xs">этап {item.stage}</span>
-            </li>
-          ))}
-        </ul>
       </section>
 
       <p className="px-2 text-center text-sm text-slate-500 dark:text-slate-400">

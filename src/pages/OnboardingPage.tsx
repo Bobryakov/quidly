@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion'
 import { useState } from 'react'
+import { RestoreBackup } from '../components/RestoreBackup'
+import { CloseButton, Sheet } from '../components/Sheet'
 import { finishOnboarding } from '../db/repo'
 import { ACCOUNT_TYPES } from '../db/seed'
 import type { AccountType } from '../db/types'
@@ -17,6 +19,7 @@ export function OnboardingPage() {
   ])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [restoring, setRestoring] = useState(false)
 
   const set = (key: number, patch: Partial<Row>) => {
     setError('')
@@ -134,10 +137,24 @@ export function OnboardingPage() {
         >
           Начать 🚀
         </button>
-        <p className="mt-3 text-center text-sm text-slate-500 dark:text-slate-400">
+        <button type="button" onClick={() => setRestoring(true)} className="mt-3 w-full py-2.5 font-semibold text-violet-600 dark:text-violet-400">
+          ♻️ Есть резервная копия? Восстановить
+        </button>
+        <p className="mt-1 text-center text-sm text-slate-500 dark:text-slate-400">
           🔐 Данные хранятся только на этом устройстве
         </p>
       </div>
+
+      <Sheet open={restoring} onClose={() => setRestoring(false)} label="Восстановить из копии">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-xl font-bold">Восстановить из копии</h2>
+          <CloseButton onClick={() => setRestoring(false)} />
+        </div>
+        <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+          Выберите файл <b>quidly-kopiya_….json</b>, который вы сохраняли раньше (обычно он в «Загрузках» или на Google Диске).
+        </p>
+        <RestoreBackup hasCurrentData={false} />
+      </Sheet>
     </motion.main>
   )
 }

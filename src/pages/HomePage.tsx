@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { BackupReminder } from '../components/BackupReminder'
 import { EmptyState } from '../components/EmptyState'
 import { HomeBudgetCard } from '../components/HomeBudgetCard'
 import { MonthSummaryCard } from '../components/MonthSummaryCard'
@@ -84,6 +85,8 @@ export function HomePage() {
           </span>
         </div>
       </section>
+
+      <BackupReminder accounts={accounts} hasTransactions={transactions.length > 0} />
 
       <SubscriptionDue subscriptions={subscriptions} categories={catById} noticeDays={noticeDays} />
 
