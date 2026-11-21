@@ -9,8 +9,8 @@ import { equalBytes, fromB64, randomBytes, toB64 } from './bytes'
  */
 
 export const PIN_ITERATIONS = 300_000
-export const PIN_MIN = 4
-export const PIN_MAX = 6
+/** Новый PIN — ровно 4 цифры (решено 21.11.2026). PIN из 5–6 цифр, заданный раньше, продолжает работать. */
+export const PIN_LENGTH = 4
 
 export interface PinRecord {
   /** соль, base64 */
@@ -22,8 +22,9 @@ export interface PinRecord {
   length: number
 }
 
+/** Подходит ли PIN, который задают сейчас: ровно 4 цифры. */
 export function isValidPin(pin: string): boolean {
-  return new RegExp(`^\\d{${PIN_MIN},${PIN_MAX}}$`).test(pin)
+  return new RegExp(`^\\d{${PIN_LENGTH}}$`).test(pin)
 }
 
 async function derive(pin: string, salt: Uint8Array<ArrayBuffer>, iterations: number): Promise<Uint8Array> {
@@ -33,14 +34,15 @@ async function derive(pin: string, salt: Uint8Array<ArrayBuffer>, iterations: nu
 }
 
 export async function hashPin(pin: string, iterations = PIN_ITERATIONS): Promise<PinRecord> {
-  if (!isValidPin(pin)) throw new Error(`PIN — от ${PIN_MIN} до ${PIN_MAX} цифр`)
+  if (!isValidPin(pin)) throw new Error(`PIN — ${PIN_LENGTH} цифры`)
   const salt = randomBytes(16)
   const hash = await derive(pin, salt, iterations)
   return { salt: toB64(salt), hash: toB64(hash), iterations, length: pin.length }
 }
 
 export async function verifyPin(pin: string, record: PinRecord): Promise<boolean> {
-  if (!isValidPin(pin)) return false
+  // длину сверяем с сохранённой: так работает и старый PIN из 5–6 цифр
+  if (!/^\d+$/.test(pin) || pin.length !== record.length) return false
   const hash = await derive(pin, fromB64(record.salt), record.iterations)
   return equalBytes(hash, fromB64(record.hash))
 }

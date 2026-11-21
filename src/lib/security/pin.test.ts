@@ -4,9 +4,11 @@ import { attemptsLeft, hashPin, isValidPin, pauseAfter, registerFail, shouldLock
 const FAST = 1000 // в тестах — меньше повторений, чтобы не ждать
 
 describe('PIN', () => {
-  it('принимает только 4–6 цифр', () => {
+  it('новый PIN — ровно 4 цифры', () => {
     expect(isValidPin('1234')).toBe(true)
-    expect(isValidPin('123456')).toBe(true)
+    expect(isValidPin('0000')).toBe(true)
+    expect(isValidPin('12345')).toBe(false)
+    expect(isValidPin('123456')).toBe(false)
     expect(isValidPin('123')).toBe(false)
     expect(isValidPin('1234567')).toBe(false)
     expect(isValidPin('12a4')).toBe(false)
@@ -21,11 +23,12 @@ describe('PIN', () => {
     expect(await verifyPin('2580', r)).toBe(true)
     expect(await verifyPin('2581', r)).toBe(false)
     expect(await verifyPin('25800', r)).toBe(false)
+    expect(await verifyPin('25a0', r)).toBe(false)
   })
 
   it('один и тот же PIN даёт разные хеши (соль случайная)', async () => {
-    const a = await hashPin('111111', FAST)
-    const b = await hashPin('111111', FAST)
+    const a = await hashPin('1111', FAST)
+    const b = await hashPin('1111', FAST)
     expect(a.salt).not.toBe(b.salt)
     expect(a.hash).not.toBe(b.hash)
   })
@@ -34,8 +37,17 @@ describe('PIN', () => {
     expect((await hashPin('9999')).iterations).toBe(300_000)
   })
 
-  it('неверный PIN не сохраняется', async () => {
-    await expect(hashPin('12')).rejects.toThrow()
+  it('PIN не из 4 цифр не сохраняется', async () => {
+    await expect(hashPin('12')).rejects.toThrow('PIN — 4 цифры')
+    await expect(hashPin('123456')).rejects.toThrow()
+  })
+
+  it('старый PIN из 6 цифр (заданный до этой версии) по-прежнему подходит', async () => {
+    const r = await hashPin('2580', FAST)
+    // подменяем запись так, будто PIN был из 6 цифр: проверяем, что сверка идёт по сохранённой длине
+    expect(await verifyPin('258000', { ...r, length: 6 })).toBe(false) // другой хеш
+    expect(await verifyPin('2580', { ...r, length: 6 })).toBe(false) // не та длина
+    expect(await verifyPin('2580', r)).toBe(true)
   })
 })
 

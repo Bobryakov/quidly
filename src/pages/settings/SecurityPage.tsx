@@ -6,7 +6,7 @@ import { useSecurity } from '../../db/hooks'
 import { checkPin, removePin, resetPinFails, setBiometric, setLockTimeout, setPin } from '../../db/securityRepo'
 import { biometricAvailable, registerBiometric, verifyBiometric, type BiometricRecord } from '../../lib/security/biometric'
 import { lockApp, lockTimeoutChanged, pinChanged } from '../../lib/security/lockState'
-import { LOCK_TIMEOUTS, lockTimeoutLabel, PIN_MAX, PIN_MIN } from '../../lib/security/pin'
+import { LOCK_TIMEOUTS, lockTimeoutLabel, PIN_LENGTH } from '../../lib/security/pin'
 import { showToast } from '../../lib/store'
 import { BackLink } from './AccountsPage'
 
@@ -51,7 +51,7 @@ export function SecurityPage() {
         <section className="rounded-3xl bg-white p-5 shadow-sm dark:bg-slate-900">
           <h2 className="font-semibold">🔒 PIN-код выключен</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Сейчас Quidly открывается сразу. С PIN-кодом — только после ввода {PIN_MIN}–{PIN_MAX} цифр или отпечатка.
+            Сейчас Quidly открывается сразу. С PIN-кодом — только после ввода {PIN_LENGTH} цифр или отпечатка.
           </p>
           <button type="button" onClick={() => setMode('create')} className="mt-4 w-full rounded-2xl bg-violet-600 py-3.5 font-semibold text-white">
             Включить PIN
@@ -220,8 +220,8 @@ function PinFlow({
     } else onDone()
   }
 
-  const next = () => {
-    setFirst(value)
+  const next = (v: string) => {
+    setFirst(v)
     setValue('')
     setError('')
     setStep('repeat')
@@ -235,8 +235,10 @@ function PinFlow({
       setValue(v)
       if (v.length === pinLength) void checkCurrent(v)
     } else if (step === 'new') {
-      const v = (value + d).slice(0, PIN_MAX)
+      const v = (value + d).slice(0, PIN_LENGTH)
       setValue(v)
+      // 4 цифры набраны — сразу «повторите»
+      if (v.length === PIN_LENGTH) next(v)
     } else if (step === 'repeat') {
       const v = (value + d).slice(0, first.length)
       setValue(v)
@@ -266,7 +268,7 @@ function PinFlow({
     onDone()
   }
 
-  const dots = step === 'current' ? pinLength : step === 'repeat' ? first.length : PIN_MAX
+  const dots = step === 'current' ? pinLength : PIN_LENGTH
 
   return (
     <div>
@@ -290,7 +292,7 @@ function PinFlow({
       ) : (
         <>
           <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-            {step === 'new' ? `От ${PIN_MIN} до ${PIN_MAX} цифр. Не используйте дату рождения и 1234.` : ' '}
+            {step === 'new' ? `${PIN_LENGTH} цифры. Не используйте год рождения и 1234.` : ' '}
           </p>
           <PinDots filled={value.length} total={dots} shake={shake} />
           <p className="mt-3 min-h-6 text-center text-sm text-rose-600 dark:text-rose-400" role="alert">
@@ -304,16 +306,6 @@ function PinFlow({
               disabled={busy}
             />
           </div>
-          {step === 'new' && (
-            <button
-              type="button"
-              disabled={value.length < PIN_MIN}
-              onClick={next}
-              className="mt-4 w-full rounded-2xl bg-violet-600 py-3.5 font-semibold text-white disabled:opacity-40"
-            >
-              Далее
-            </button>
-          )}
         </>
       )}
     </div>

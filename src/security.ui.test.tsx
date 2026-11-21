@@ -51,16 +51,17 @@ describe('PIN-код', () => {
     renderAt('/settings/security')
     fireEvent.click(await screen.findByRole('button', { name: 'Включить PIN' }))
     const sheet = await screen.findByRole('dialog', { name: 'PIN-код' })
-    expect(within(sheet).getByText(/PIN — это замок экрана|Не используйте дату рождения/)).toBeInTheDocument()
+    expect(within(sheet).getByText(/4 цифры\. Не используйте год рождения/)).toBeInTheDocument()
+    expect(within(sheet).getByLabelText('Введено цифр: 0').children).toHaveLength(4) // 4 кружка
+    expect(within(sheet).queryByRole('button', { name: 'Далее' })).not.toBeInTheDocument()
     type(sheet, '258')
-    expect(within(sheet).getByRole('button', { name: 'Далее' })).toBeDisabled()
-    type(sheet, '0')
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Далее' }))
+    expect(within(sheet).getByRole('heading', { name: 'Придумайте PIN' })).toBeInTheDocument()
+    type(sheet, '0') // четвёртая цифра — сразу «повторите»
     expect(within(sheet).getByRole('heading', { name: 'Повторите PIN' })).toBeInTheDocument()
     type(sheet, '2581') // не совпал
-    expect(await within(sheet).findByRole('alert')).toHaveTextContent('PIN не совпал')
+    await waitFor(() => expect(within(sheet).getByRole('alert')).toHaveTextContent('PIN не совпал'))
     type(sheet, '2580')
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Далее' }))
+    expect(within(sheet).getByRole('heading', { name: 'Повторите PIN' })).toBeInTheDocument()
     type(sheet, '2580')
     expect(await screen.findByText('PIN включён 🔒')).toBeInTheDocument()
     expect(await screen.findByRole('heading', { name: '✅ PIN-код включён' })).toBeInTheDocument()
@@ -135,18 +136,42 @@ describe('PIN-код', () => {
     type(sheet, '2580')
     await within(sheet).findByRole('heading', { name: 'Придумайте PIN' })
     expect(within(sheet).getByLabelText('Введено цифр: 0')).toBeInTheDocument() // старые цифры стёрты
-    type(sheet, '1357909') // седьмая цифра не влезает
-    expect(within(sheet).getByLabelText('Введено цифр: 6')).toBeInTheDocument()
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Далее' }))
-    type(sheet, '135790')
+    type(sheet, '1357')
+    type(sheet, '1357')
     expect(await screen.findByText('PIN изменён')).toBeInTheDocument()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Выключить PIN' }))
     sheet = await screen.findByRole('dialog', { name: 'PIN-код' })
-    type(sheet, '135790')
+    type(sheet, '1357')
     expect(await screen.findByText('PIN выключен')).toBeInTheDocument()
     expect(await getMeta(META.pin)).toBeUndefined()
     expect(lock.get()).toBe('off')
+  })
+
+  it('PIN из 6 цифр, заданный раньше, продолжает работать; сменить можно только на 4 цифры', async () => {
+    // как было на этапе 8: PIN «135790»
+    const salt = crypto.getRandomValues(new Uint8Array(16))
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode('135790'), 'PBKDF2', false, ['deriveBits'])
+    const hash = new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 1000 }, key, 256))
+    const b64 = (u: Uint8Array) => btoa(String.fromCharCode(...u))
+    await db.meta.put({ key: META.pin, value: { salt: b64(salt), hash: b64(hash), iterations: 1000, length: 6 } })
+
+    renderAt('/settings/security')
+    const ls = await screen.findByRole('dialog', { name: 'Quidly заблокирован' })
+    expect(within(ls).getByLabelText('Введено цифр: 0').children).toHaveLength(6)
+    type(ls, '135790')
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Quidly заблокирован' })).not.toBeInTheDocument())
+
+    fireEvent.click(await screen.findByRole('button', { name: '🔢 Сменить PIN' }))
+    const sheet = await screen.findByRole('dialog', { name: 'PIN-код' })
+    expect(within(sheet).getByLabelText('Введено цифр: 0').children).toHaveLength(6) // текущий — 6 цифр
+    type(sheet, '135790')
+    await within(sheet).findByRole('heading', { name: 'Придумайте PIN' })
+    expect(within(sheet).getByLabelText('Введено цифр: 0').children).toHaveLength(4) // новый — 4
+    type(sheet, '2468')
+    type(sheet, '2468')
+    expect(await screen.findByText('PIN изменён')).toBeInTheDocument()
+    expect((await getMeta<{ length: number }>(META.pin))?.length).toBe(4)
   })
 
   it('«Забыли PIN?» — только с удалением всех данных и словом УДАЛИТЬ', async () => {
